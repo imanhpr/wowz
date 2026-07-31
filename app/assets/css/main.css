@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+@import "@fontsource-variable/vazirmatn/wght.css";
+
+@theme static {
+  --font-sans: "Vazirmatn Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-warcraft-50: #fffbea;
+  --color-warcraft-100: #fff3c4;
+  --color-warcraft-200: #ffe688;
+  --color-warcraft-300: #ffd34a;
+  --color-warcraft-400: #f8b700;
+  --color-warcraft-500: #db9300;
+  --color-warcraft-600: #b66b00;
+  --color-warcraft-700: #924b05;
+  --color-warcraft-800: #783b0b;
+  --color-warcraft-900: #65310e;
+  --color-warcraft-950: #3a1805;
+}
+
+:root {
+  color-scheme: dark;
+  --ui-primary: var(--ui-color-warcraft-400);
+  --ui-bg: #081426;
+  --ui-bg-muted: #0d1d35;
+  --ui-bg-elevated: #102541;
+  --ui-bg-accented: #183454;
+  --ui-border: rgb(248 183 0 / 18%);
+  --ui-text: #f8fafc;
+  --ui-text-muted: #bac5d5;
+  --ui-text-dimmed: #8795a8;
+  --ui-radius: 0.875rem;
+}
+
+html,
+body,
+#__nuxt {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #081426;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.warcraft-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 12%, rgb(248 183 0 / 16%), transparent 30rem),
+    radial-gradient(circle at 10% 86%, rgb(30 91 151 / 24%), transparent 34rem),
+    linear-gradient(145deg, #050b16 0%, #0b2342 52%, #071426 100%);
+}
+
+.warcraft-page::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 2%) 1px, transparent 1px);
+  background-size: 48px 48px;
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+
+.warcraft-card {
+  border-color: rgb(248 183 0 / 24%);
+  background: linear-gradient(145deg, rgb(16 37 65 / 92%), rgb(7 20 38 / 94%));
+  box-shadow: 0 24px 70px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 4%);
+  backdrop-filter: blur(16px);
+}
+
+.gold-text {
+  color: #f8b700;
+  text-shadow: 0 0 28px rgb(248 183 0 / 22%);
+}
