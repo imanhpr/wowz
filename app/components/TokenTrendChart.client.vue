@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { CurveType, LineChart } from 'vue-chrts'
 import type { TokenPricePoint } from '../../shared/types/wow-token'
-import { formatChartDate, formatGold } from '../utils/formatters'
+import { formatChartDate, formatGold, formatTokenDate } from '../utils/formatters'
+
+interface ChartDatum {
+  timestamp: string
+  price: number
+}
 
 const props = defineProps<{
   points: TokenPricePoint[]
@@ -24,6 +29,10 @@ function formatXAxis(tick: number): string {
   const point = chartData.value[tick]
   return point ? formatChartDate(point.timestamp) : ''
 }
+
+function formatTooltipTitle(point: ChartDatum): string {
+  return formatTokenDate(point.timestamp)
+}
 </script>
 
 <template>
@@ -40,6 +49,7 @@ function formatXAxis(tick: number): string {
       :line-width="3"
       :x-formatter="formatXAxis"
       :y-formatter="formatGold"
+      :tooltip-title-formatter="formatTooltipTitle"
       :x-num-ticks="4"
       :y-num-ticks="4"
       :y-grid-line="true"
