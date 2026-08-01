@@ -42,6 +42,8 @@ describe('TokenDashboard', () => {
     expect(wrapper.text()).toContain('روند آزمایشی')
     expect(wrapper.get('[data-testid="quote-card"]').attributes('data-testid')).toBe('quote-card')
     expect(wrapper.get('[data-testid="trend-card"]').attributes('data-testid')).toBe('trend-card')
+    expect(wrapper.findAll('[data-testid="gold-coin-icon"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="gold-coin-icon"]').every(icon => icon.attributes('aria-hidden') === 'true')).toBe(true)
   })
 
   it('renders an accessible loading state', async () => {

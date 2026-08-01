@@ -121,11 +121,12 @@ const chartSummary = computed(() => {
           </template>
 
           <div class="flex min-h-56 flex-col justify-center" aria-live="polite">
-            <p class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span class="gold-text text-5xl font-black tabular-nums sm:text-6xl">
                 {{ formatGold(data.quote.priceGold) }}
               </span>
-              <span class="text-xl font-bold text-muted">
+              <span class="inline-flex items-center gap-1.5 text-xl font-bold text-muted">
+                <GoldCoinIcon class="size-5" />
                 {{ t('quote.gold') }}
               </span>
             </p>
@@ -144,7 +145,8 @@ const chartSummary = computed(() => {
                 <h2 class="text-lg font-bold text-highlighted">
                   {{ t('chart.title') }}
                 </h2>
-                <p class="mt-1 text-sm leading-6 text-muted">
+                <p class="mt-1 flex items-center gap-2 text-sm leading-6 text-muted">
+                  <GoldCoinIcon class="size-4" />
                   {{ t('chart.description') }}
                 </p>
               </div>
