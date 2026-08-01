@@ -81,6 +81,9 @@ describe('TokenDashboard', () => {
     })
     expect(wrapper.findAll('[data-testid="gold-coin-icon"]')).toHaveLength(3)
     expect(wrapper.findAll('[data-testid="gold-coin-icon"]').every(icon => icon.attributes('aria-hidden') === 'true')).toBe(true)
+    expect(wrapper.findAll('[data-testid="live-pulse-indicator"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="live-pulse-indicator"]').every(indicator => indicator.attributes('aria-hidden') === 'true')).toBe(true)
+    expect(wrapper.findAll('.motion-safe\\:animate-ping')).toHaveLength(3)
   })
 
   it('shows a collecting state until both regions have two historical observations', async () => {

@@ -143,7 +143,9 @@ const chartSummaries = computed(() => regions.flatMap((region) => {
                   <UBadge
                     color="success"
                     variant="subtle"
+                    class="gap-2"
                   >
+                    <LivePulseIndicator />
                     {{ t('quote.live') }}
                   </UBadge>
                 </div>
@@ -185,7 +187,8 @@ const chartSummaries = computed(() => regions.flatMap((region) => {
                     {{ t('chart.description') }}
                   </p>
                 </div>
-                <UBadge color="success" variant="subtle">
+                <UBadge color="success" variant="subtle" class="gap-2">
+                  <LivePulseIndicator />
                   {{ t('chart.live') }}
                 </UBadge>
               </div>
