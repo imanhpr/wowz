@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWowTokenDatabase } from '../../server/database/client'
 import { WowTokenRepository, type TokenHistoryStore } from '../../server/database/wow-token-repository'
@@ -263,7 +262,6 @@ describe('SQLite history repository', () => {
     temporaryDirectories.push(directory)
     const database = createWowTokenDatabase(join(directory, 'history.sqlite'))
     closeDatabases.push(database.close)
-    migrate(database.db, { migrationsFolder: resolve('drizzle') })
     const logger = { info: vi.fn() }
     const repository = new WowTokenRepository(database.db, logger)
 

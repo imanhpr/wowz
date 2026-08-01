@@ -25,12 +25,16 @@ NUXT_BATTLENET_CLIENT_SECRET=your-client-secret
 NUXT_SQLITE_PATH=.data/wow-token.sqlite
 ```
 
-Create or update the SQLite schema before starting the application:
+Start the application:
 
 ```bash
-npm run db:migrate
 npm run dev
 ```
+
+Database migrations run automatically and synchronously when the server opens
+SQLite, before the scheduler or API handlers can use it. Migration failures stop
+startup instead of allowing the application to run against an outdated schema.
+`npm run db:migrate` remains available for manual maintenance.
 
 Both credentials are required. They remain in Nuxt's server-only runtime configuration and are never returned to the browser.
 

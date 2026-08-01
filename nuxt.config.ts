@@ -1,3 +1,6 @@
+import { cpSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -35,6 +38,18 @@ export default defineNuxtConfig({
     battlenetClientId: '',
     battlenetClientSecret: '',
     sqlitePath: '.data/wow-token.sqlite',
+  },
+
+  nitro: {
+    hooks: {
+      compiled(nitro) {
+        cpSync(
+          resolve('drizzle'),
+          resolve(nitro.options.output.serverDir, 'drizzle'),
+          { recursive: true },
+        )
+      },
+    },
   },
 
   app: {
