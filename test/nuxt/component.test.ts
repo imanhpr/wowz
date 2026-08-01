@@ -29,7 +29,7 @@ const response: WowTokenResponse = {
 }
 
 describe('TokenDashboard', () => {
-  it('defaults to EU and switches the live quote and history to US', async () => {
+  it('shows both regional quotes and one shared chart without region tabs', async () => {
     const wrapper = await mountSuspended(TokenDashboard, {
       props: {
         data: response,
@@ -38,7 +38,16 @@ describe('TokenDashboard', () => {
       global: {
         stubs: {
           TokenTrendChart: {
-            template: '<div data-testid="token-chart-stub" />',
+            props: ['euPoints', 'usPoints', 'euLabel', 'usLabel'],
+            template: `
+              <div
+                data-testid="token-chart-stub"
+                :data-eu-count="euPoints.length"
+                :data-us-count="usPoints.length"
+                :data-eu-label="euLabel"
+                :data-us-label="usLabel"
+              />
+            `,
           },
         },
       },
@@ -46,22 +55,35 @@ describe('TokenDashboard', () => {
 
     expect(wrapper.text()).toContain('قیمت توکن World Of Warcraft')
     expect(wrapper.text()).toContain('۲۸۶٬۲۵۰')
+    expect(wrapper.text()).toContain('۳۳۱٬۴۰۰')
+    expect(wrapper.text()).toContain('منطقه اروپا')
+    expect(wrapper.text()).toContain('منطقه آمریکا')
     expect(wrapper.text()).toContain('داده زنده بتل‌نت')
     expect(wrapper.text()).toContain('روند واقعی')
-    expect(wrapper.get('[data-testid="region-tab-eu"]').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('[data-testid="region-tab-us"]').attributes('aria-selected')).toBe('false')
-
-    await wrapper.get('[data-testid="region-tab-us"]').trigger('click')
-    expect(wrapper.text()).toContain('۳۳۱٬۴۰۰')
-    expect(wrapper.text()).toContain('منطقه آمریکا')
-    expect(wrapper.get('[data-testid="region-tab-us"]').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('[data-testid="quote-card"]').attributes('data-testid')).toBe('quote-card')
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="quote-grid"]').classes()).toEqual(expect.arrayContaining([
+      'grid',
+      'md:grid-cols-2',
+    ]))
+    expect(wrapper.get('[data-testid="quote-card-eu"]').text()).toContain('۲۸۶٬۲۵۰')
+    expect(wrapper.get('[data-testid="quote-card-us"]').text()).toContain('۳۳۱٬۴۰۰')
+    expect(wrapper.get('[data-testid="quote-card-eu"]').text()).toContain('آخرین به‌روزرسانی')
+    expect(wrapper.get('[data-testid="quote-card-us"]').text()).toContain('آخرین به‌روزرسانی')
     expect(wrapper.get('[data-testid="trend-card"]').attributes('data-testid')).toBe('trend-card')
-    expect(wrapper.findAll('[data-testid="gold-coin-icon"]')).toHaveLength(2)
+    expect(wrapper.get('.sr-only').text()).toContain('در منطقه اروپا، کمترین قیمت ۲۷۴٬۳۰۰ طلا و بیشترین قیمت ۲۸۶٬۲۵۰ طلا است.')
+    expect(wrapper.get('.sr-only').text()).toContain('در منطقه آمریکا، کمترین قیمت ۳۲۶٬۰۰۰ طلا و بیشترین قیمت ۳۳۱٬۴۰۰ طلا است.')
+    expect(wrapper.get('[data-testid="token-chart-stub"]').attributes()).toMatchObject({
+      'data-eu-count': '2',
+      'data-us-count': '2',
+      'data-eu-label': 'اروپا',
+      'data-us-label': 'آمریکا',
+    })
+    expect(wrapper.findAll('[data-testid="gold-coin-icon"]')).toHaveLength(3)
     expect(wrapper.findAll('[data-testid="gold-coin-icon"]').every(icon => icon.attributes('aria-hidden') === 'true')).toBe(true)
   })
 
-  it('shows a collecting state until a region has two historical observations', async () => {
+  it('shows a collecting state until both regions have two historical observations', async () => {
     const sparseResponse: WowTokenResponse = structuredClone(response)
     sparseResponse.regions.eu.trend.points = [sparseResponse.regions.eu.quote]
 

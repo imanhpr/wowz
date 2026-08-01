@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WowRegion, WowTokenResponse } from '../../shared/types/wow-token'
+import type { WowTokenResponse } from '../../shared/types/wow-token'
 import { formatGold, formatRelativeTime, formatTokenDate } from '../utils/formatters'
 
 const props = withDefaults(defineProps<{
@@ -17,8 +17,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const activeRegion = ref<WowRegion>('eu')
 const currentTime = useState('token-dashboard-current-time', () => Date.now())
+const regions = ['eu', 'us'] as const
 let relativeTimeTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
@@ -36,21 +36,23 @@ onUnmounted(() => {
 
 const isLoading = computed(() => props.status === 'idle' || props.status === 'pending')
 const hasError = computed(() => props.status === 'error' || props.error)
-const regionData = computed(() => props.data?.regions[activeRegion.value])
-const regionTabs: WowRegion[] = ['eu', 'us']
+const isChartReady = computed(() => regions.every(
+  region => (props.data?.regions[region].trend.points.length ?? 0) >= 2,
+))
 
-const chartSummary = computed(() => {
-  const prices = regionData.value?.trend.points.map(point => point.priceGold) ?? []
+const chartSummaries = computed(() => regions.flatMap((region) => {
+  const prices = props.data?.regions[region].trend.points.map(point => point.priceGold) ?? []
 
   if (!prices.length) {
-    return ''
+    return []
   }
 
-  return t('chart.summary', {
+  return [t('chart.summary', {
+    region: t(`regions.${region}`),
     min: formatGold(Math.min(...prices)),
     max: formatGold(Math.max(...prices)),
-  })
-})
+  })]
+}))
 </script>
 
 <template>
@@ -76,17 +78,23 @@ const chartSummary = computed(() => {
 
       <section
         v-if="isLoading"
-        class="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]"
+        class="space-y-5"
         :aria-label="t('states.loading')"
         aria-busy="true"
       >
-        <UCard class="warcraft-card">
-          <div class="space-y-5">
-            <USkeleton class="h-5 w-32" />
-            <USkeleton class="h-14 w-52" />
-            <USkeleton class="h-4 w-44" />
-          </div>
-        </UCard>
+        <div class="grid gap-5 md:grid-cols-2">
+          <UCard
+            v-for="region in regions"
+            :key="region"
+            class="warcraft-card"
+          >
+            <div class="space-y-5">
+              <USkeleton class="h-5 w-32" />
+              <USkeleton class="h-14 w-52" />
+              <USkeleton class="h-4 w-44" />
+            </div>
+          </UCard>
+        </div>
         <UCard class="warcraft-card">
           <div class="space-y-5">
             <USkeleton class="h-5 w-44" />
@@ -113,115 +121,102 @@ const chartSummary = computed(() => {
         </template>
       </UAlert>
 
-      <template v-else-if="data && regionData">
-        <nav
-          class="mx-auto mb-5 flex w-fit rounded-xl border border-default bg-elevated/70 p-1"
-          role="tablist"
-          :aria-label="t('regions.label')"
-        >
-          <button
-            v-for="region in regionTabs"
-            :id="`region-tab-${region}`"
-            :key="region"
-            type="button"
-            role="tab"
-            :aria-selected="activeRegion === region"
-            :aria-controls="`region-panel-${region}`"
-            :data-testid="`region-tab-${region}`"
-            class="min-w-28 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors"
-            :class="activeRegion === region
-              ? 'bg-primary text-inverted shadow-sm'
-              : 'text-muted hover:text-highlighted'"
-            @click="activeRegion = region"
-          >
-            {{ t(`regions.${region}`) }}
-          </button>
-        </nav>
-
+      <template v-else-if="data">
         <section
-          :id="`region-panel-${activeRegion}`"
-          role="tabpanel"
-          :aria-labelledby="`region-tab-${activeRegion}`"
-          class="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]"
+          class="space-y-5"
         >
-        <UCard class="warcraft-card h-full" data-testid="quote-card">
-          <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 class="text-lg font-bold text-highlighted">
-                {{ t('quote.title') }}
-              </h2>
-              <UBadge
-                color="success"
-                variant="subtle"
-              >
-                {{ t('quote.live') }}
-              </UBadge>
-            </div>
-          </template>
+          <div
+            class="grid gap-5 md:grid-cols-2"
+            data-testid="quote-grid"
+          >
+            <UCard
+              v-for="region in regions"
+              :key="region"
+              class="warcraft-card h-full"
+              :data-testid="`quote-card-${region}`"
+            >
+              <template #header>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h2 class="text-lg font-bold text-highlighted">
+                    {{ t('quote.title', { region: t(`regions.${region}`) }) }}
+                  </h2>
+                  <UBadge
+                    color="success"
+                    variant="subtle"
+                  >
+                    {{ t('quote.live') }}
+                  </UBadge>
+                </div>
+              </template>
 
-          <div class="flex min-h-56 flex-col justify-center" aria-live="polite">
-            <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span class="gold-text text-5xl font-black tabular-nums sm:text-6xl">
-                {{ formatGold(regionData.quote.priceGold) }}
-              </span>
-              <span class="inline-flex items-center gap-1.5 text-xl font-bold text-muted">
-                <GoldCoinIcon class="size-5" />
-                {{ t('quote.gold') }}
-              </span>
-            </p>
+              <div class="flex min-h-56 flex-col justify-center" aria-live="polite">
+                <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span class="gold-text text-5xl font-black tabular-nums sm:text-6xl">
+                    {{ formatGold(data.regions[region].quote.priceGold) }}
+                  </span>
+                  <span class="inline-flex items-center gap-1.5 text-xl font-bold text-muted">
+                    <GoldCoinIcon class="size-5" />
+                    {{ t('quote.gold') }}
+                  </span>
+                </p>
 
-            <div class="mt-7 space-y-2 text-sm text-muted">
-              <p>{{ t('quote.region', { region: t(`regions.${activeRegion}`) }) }}</p>
-              <p>
-                {{ t('quote.updatedAt', {
-                  date: formatTokenDate(regionData.quote.timestamp),
-                  relative: formatRelativeTime(regionData.quote.timestamp, currentTime),
-                }) }}
+                <div class="mt-7 space-y-2 text-sm text-muted">
+                  <p>{{ t('quote.region', { region: t(`regions.${region}`) }) }}</p>
+                  <p>
+                    {{ t('quote.updatedAt', {
+                      date: formatTokenDate(data.regions[region].quote.timestamp),
+                      relative: formatRelativeTime(data.regions[region].quote.timestamp, currentTime),
+                    }) }}
+                  </p>
+                </div>
+              </div>
+            </UCard>
+          </div>
+
+          <UCard class="warcraft-card" data-testid="trend-card">
+            <template #header>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-lg font-bold text-highlighted">
+                    {{ t('chart.title') }}
+                  </h2>
+                  <p class="mt-1 flex items-center gap-2 text-sm leading-6 text-muted">
+                    <GoldCoinIcon class="size-4" />
+                    {{ t('chart.description') }}
+                  </p>
+                </div>
+                <UBadge color="success" variant="subtle">
+                  {{ t('chart.live') }}
+                </UBadge>
+              </div>
+            </template>
+
+            <div v-if="isChartReady" class="sr-only">
+              <p v-for="summary in chartSummaries" :key="summary">
+                {{ summary }}
               </p>
             </div>
-          </div>
-        </UCard>
 
-        <UCard class="warcraft-card" data-testid="trend-card">
-          <template #header>
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-bold text-highlighted">
-                  {{ t('chart.title') }}
-                </h2>
-                <p class="mt-1 flex items-center gap-2 text-sm leading-6 text-muted">
-                  <GoldCoinIcon class="size-4" />
-                  {{ t('chart.description') }}
-                </p>
-              </div>
-              <UBadge color="success" variant="subtle">
-                {{ t('chart.live') }}
-              </UBadge>
+            <div
+              v-if="!isChartReady"
+              class="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-default bg-elevated/40 px-6 text-center text-sm leading-7 text-muted"
+              data-testid="history-collecting"
+            >
+              {{ t('chart.collecting') }}
             </div>
-          </template>
 
-          <p v-if="regionData.trend.points.length >= 2" class="sr-only">
-            {{ chartSummary }}
-          </p>
-
-          <div
-            v-if="regionData.trend.points.length < 2"
-            class="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-default bg-elevated/40 px-6 text-center text-sm leading-7 text-muted"
-            data-testid="history-collecting"
-          >
-            {{ t('chart.collecting') }}
-          </div>
-
-          <ClientOnly v-else>
-            <TokenTrendChart
-              :points="regionData.trend.points"
-              :series-label="t('chart.series')"
-            />
-            <template #fallback>
-              <USkeleton class="h-64 w-full" />
-            </template>
-          </ClientOnly>
-        </UCard>
+            <ClientOnly v-else>
+              <TokenTrendChart
+                :eu-points="data.regions.eu.trend.points"
+                :us-points="data.regions.us.trend.points"
+                :eu-label="t('regions.eu')"
+                :us-label="t('regions.us')"
+              />
+              <template #fallback>
+                <USkeleton class="h-64 w-full" />
+              </template>
+            </ClientOnly>
+          </UCard>
         </section>
       </template>
 

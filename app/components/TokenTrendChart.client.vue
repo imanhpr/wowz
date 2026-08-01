@@ -5,23 +5,77 @@ import { formatChartDate, formatGold, formatTokenDate } from '../utils/formatter
 
 interface ChartDatum {
   timestamp: string
-  price: number
+  euPrice: number
+  usPrice: number
 }
 
 const props = defineProps<{
-  points: TokenPricePoint[]
-  seriesLabel: string
+  euPoints: TokenPricePoint[]
+  usPoints: TokenPricePoint[]
+  euLabel: string
+  usLabel: string
 }>()
 
-const chartData = computed(() => props.points.map(point => ({
-  timestamp: point.timestamp,
-  price: point.priceGold,
-})))
+function mergeRegionalPoints(
+  euPoints: TokenPricePoint[],
+  usPoints: TokenPricePoint[],
+): ChartDatum[] {
+  const sortedEuPoints = [...euPoints].sort(
+    (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp),
+  )
+  const sortedUsPoints = [...usPoints].sort(
+    (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp),
+  )
+  const timestamps = [...new Set([
+    ...sortedEuPoints.map(point => Date.parse(point.timestamp)),
+    ...sortedUsPoints.map(point => Date.parse(point.timestamp)),
+  ])].sort((left, right) => left - right)
+
+  let euIndex = 0
+  let usIndex = 0
+  let euPrice: number | undefined
+  let usPrice: number | undefined
+  const mergedPoints: ChartDatum[] = []
+
+  for (const timestamp of timestamps) {
+    while (
+      euIndex < sortedEuPoints.length
+      && Date.parse(sortedEuPoints[euIndex]!.timestamp) <= timestamp
+    ) {
+      euPrice = sortedEuPoints[euIndex]!.priceGold
+      euIndex += 1
+    }
+
+    while (
+      usIndex < sortedUsPoints.length
+      && Date.parse(sortedUsPoints[usIndex]!.timestamp) <= timestamp
+    ) {
+      usPrice = sortedUsPoints[usIndex]!.priceGold
+      usIndex += 1
+    }
+
+    if (euPrice !== undefined && usPrice !== undefined) {
+      mergedPoints.push({
+        timestamp: new Date(timestamp).toISOString(),
+        euPrice,
+        usPrice,
+      })
+    }
+  }
+
+  return mergedPoints
+}
+
+const chartData = computed(() => mergeRegionalPoints(props.euPoints, props.usPoints))
 
 const categories = computed(() => ({
-  price: {
-    name: props.seriesLabel,
+  euPrice: {
+    name: props.euLabel,
     color: '#f8b700',
+  },
+  usPrice: {
+    name: props.usLabel,
+    color: '#3b82f6',
   },
 }))
 
@@ -53,7 +107,7 @@ function formatTooltipTitle(point: ChartDatum): string {
       :x-num-ticks="4"
       :y-num-ticks="4"
       :y-grid-line="true"
-      :hide-legend="true"
+      :hide-legend="false"
       :padding="{ top: 12, right: 16, bottom: 8, left: 8 }"
       :x-axis-config="{ tickTextColor: '#94a3b8', tickTextFontSize: '12px' }"
       :y-axis-config="{ tickTextColor: '#94a3b8', tickTextFontSize: '12px' }"

@@ -48,7 +48,10 @@ describe('index page', () => {
 
     expect(wrapper.get('[data-testid="page-container"]').classes()).toContain('max-w-5xl')
     expect(wrapper.text()).toContain('بازار اروپا و آمریکا')
-    expect(wrapper.get('[data-testid="region-tab-eu"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="quote-card-eu"]').text()).toContain('۲۸۶٬۲۵۰')
+    expect(wrapper.get('[data-testid="quote-card-us"]').text()).toContain('۳۳۱٬۴۰۰')
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid^="quote-card-"]')).toHaveLength(2)
     expect(document.documentElement.lang).toBe('fa-IR')
     expect(document.documentElement.dir).toBe('rtl')
 
