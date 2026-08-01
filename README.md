@@ -50,3 +50,22 @@ npm run typecheck
 npx eslint .
 npm run build
 ```
+
+## Docker
+
+Build the production image and run it with a persistent volume for SQLite:
+
+```bash
+docker build -t wowz .
+docker run --detach \
+  --name wowz \
+  --publish 3000:3000 \
+  --env-file .env \
+  --volume wowz-data:/app/.data \
+  --restart unless-stopped \
+  wowz
+```
+
+The image runs the self-contained Nitro output as an unprivileged user and
+includes a TCP health check. Keep the deployment to one replica because the
+scheduler, SSE fan-out, and SQLite database are process-local.
