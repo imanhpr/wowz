@@ -14,6 +14,20 @@ const shortDateFormatter = new Intl.DateTimeFormat('fa-IR', {
   timeZone: 'Asia/Tehran',
 })
 
+const shortDateTimeFormatter = new Intl.DateTimeFormat('fa-IR', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Asia/Tehran',
+})
+
+const percentChangeFormatter = new Intl.NumberFormat('fa-IR', {
+  style: 'percent',
+  maximumFractionDigits: 2,
+  signDisplay: 'exceptZero',
+})
+
 const relativeTimeFormatter = new Intl.RelativeTimeFormat('fa-IR', {
   numeric: 'auto',
 })
@@ -47,4 +61,12 @@ export function formatRelativeTime(value: string, now = Date.now()): string {
 
 export function formatChartDate(value: string): string {
   return shortDateFormatter.format(new Date(value))
+}
+
+export function formatChartDateTime(value: string): string {
+  return shortDateTimeFormatter.format(new Date(value))
+}
+
+export function formatPercentChange(value: number): string {
+  return percentChangeFormatter.format(value)
 }
