@@ -1,0 +1,73 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "68f254ad-20eb-40c9-87cb-0bda5a90ceb7",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "wow_token_prices": {
+      "name": "wow_token_prices",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "price_gold": {
+          "name": "price_gold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "wow_token_prices_region_timestamp_unique": {
+          "name": "wow_token_prices_region_timestamp_unique",
+          "columns": [
+            "region",
+            "timestamp"
+          ],
+          "isUnique": true
+        },
+        "wow_token_prices_region_timestamp_idx": {
+          "name": "wow_token_prices_region_timestamp_idx",
+          "columns": [
+            "region",
+            "timestamp"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

@@ -1,32 +1,20 @@
-import { createError, defineEventHandler } from 'h3'
-import {
-  getWowTokenData,
-  TokenConfigurationError,
-} from '../utils/wow-token-service'
+import { defineEventHandler } from 'h3'
+import type { HttpClient } from '../utils/battlenet'
+import { createWowTokenHttpError } from '../utils/wow-token-http-error'
+import { getWowTokenRuntime } from '../utils/wow-token-runtime'
 
 export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
+  const runtime = getWowTokenRuntime({
+    battlenetClientId: config.battlenetClientId,
+    battlenetClientSecret: config.battlenetClientSecret,
+    sqlitePath: config.sqlitePath,
+  }, $fetch as unknown as HttpClient)
 
   try {
-    return await getWowTokenData(
-      {
-        clientId: config.battlenetClientId,
-        clientSecret: config.battlenetClientSecret,
-      },
-      $fetch,
-    )
+    return await runtime.service.getDashboardData()
   }
   catch (error) {
-    if (error instanceof TokenConfigurationError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Battle.net credentials are incomplete',
-      })
-    }
-
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'Unable to retrieve the WoW Token price',
-    })
+    throw createWowTokenHttpError(error)
   }
 })

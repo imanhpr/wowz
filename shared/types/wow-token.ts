@@ -1,4 +1,4 @@
-export type TokenDataSource = 'mock' | 'battle-net'
+export type WowRegion = 'eu' | 'us'
 
 export interface TokenPricePoint {
   timestamp: string
@@ -6,13 +6,13 @@ export interface TokenPricePoint {
 }
 
 export interface WowTokenResponse {
-  region: 'eu'
-  quote: TokenPricePoint & {
-    source: TokenDataSource
-  }
-  trend: {
-    period: '7d'
-    source: 'mock'
-    points: TokenPricePoint[]
-  }
+  regions: Record<WowRegion, {
+    quote: TokenPricePoint
+    trend: {
+      period: '7d'
+      points: TokenPricePoint[]
+    }
+  }>
 }
+
+export type RegionalTokenQuotes = Record<WowRegion, TokenPricePoint>

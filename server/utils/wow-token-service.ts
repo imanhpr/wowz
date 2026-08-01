@@ -1,87 +1,116 @@
-import type { WowTokenResponse } from '../../shared/types/wow-token'
-import {
-  fetchBattleNetQuote,
-  type BattleNetCredentials,
-  type HttpClient,
-} from './battlenet'
+import type {
+  RegionalTokenQuotes,
+  WowTokenResponse,
+} from '../../shared/types/wow-token'
+import type { TokenHistoryStore } from '../database/wow-token-repository'
+import type { BattleNetCredentials, BattleNetQuoteClient } from './battlenet'
 
-const DEMO_PRICES = [274_300, 276_850, 275_100, 279_650, 281_200, 284_900, 286_250]
+const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000
 
 export class TokenConfigurationError extends Error {
   constructor() {
-    super('Both Battle.net credentials must be configured together')
+    super('Battle.net credentials are not fully configured')
     this.name = 'TokenConfigurationError'
   }
 }
 
 export class TokenUpstreamError extends Error {
   constructor() {
-    super('Unable to retrieve the WoW Token price')
+    super('Unable to retrieve the WoW Token prices')
     this.name = 'TokenUpstreamError'
   }
 }
 
-export function createMockTokenResponse(now = new Date()): WowTokenResponse {
-  const endDate = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-    12,
-  ))
-
-  const points = DEMO_PRICES.map((priceGold, index) => {
-    const timestamp = new Date(endDate)
-    timestamp.setUTCDate(endDate.getUTCDate() - (DEMO_PRICES.length - index - 1))
-
-    return {
-      timestamp: timestamp.toISOString(),
-      priceGold,
-    }
-  })
-
-  return {
-    region: 'eu',
-    quote: {
-      ...points.at(-1)!,
-      source: 'mock',
-    },
-    trend: {
-      period: '7d',
-      source: 'mock',
-      points,
-    },
+export class TokenStorageError extends Error {
+  constructor() {
+    super('Unable to store or read WoW Token prices')
+    this.name = 'TokenStorageError'
   }
 }
 
-export async function getWowTokenData(
-  credentials: BattleNetCredentials,
-  httpClient: HttpClient,
-  now = new Date(),
-): Promise<WowTokenResponse> {
-  const hasClientId = credentials.clientId.trim().length > 0
-  const hasClientSecret = credentials.clientSecret.trim().length > 0
+export class WowTokenService {
+  private activeCollection: Promise<RegionalTokenQuotes> | null = null
 
-  if (!hasClientId && !hasClientSecret) {
-    return createMockTokenResponse(now)
+  constructor(
+    private readonly credentials: BattleNetCredentials,
+    private readonly battleNetClient: BattleNetQuoteClient,
+    private readonly historyStore: TokenHistoryStore,
+  ) {}
+
+  collect(): Promise<RegionalTokenQuotes> {
+    if (this.activeCollection) {
+      return this.activeCollection
+    }
+
+    this.activeCollection = this.collectAllRegions()
+      .finally(() => {
+        this.activeCollection = null
+      })
+
+    return this.activeCollection
   }
 
-  if (hasClientId !== hasClientSecret) {
-    throw new TokenConfigurationError()
-  }
+  async getDashboardData(now = new Date()): Promise<WowTokenResponse> {
+    const quotes = await this.collect()
+    const since = new Date(now.getTime() - HISTORY_WINDOW_MS)
 
-  try {
-    const quote = await fetchBattleNetQuote(credentials, httpClient)
-    const mock = createMockTokenResponse(new Date(quote.timestamp))
-
-    return {
-      ...mock,
-      quote: {
-        ...quote,
-        source: 'battle-net',
-      },
+    try {
+      return {
+        regions: {
+          eu: {
+            quote: quotes.eu,
+            trend: {
+              period: '7d',
+              points: this.historyStore.getHistory('eu', since),
+            },
+          },
+          us: {
+            quote: quotes.us,
+            trend: {
+              period: '7d',
+              points: this.historyStore.getHistory('us', since),
+            },
+          },
+        },
+      }
+    }
+    catch {
+      throw new TokenStorageError()
     }
   }
-  catch {
-    throw new TokenUpstreamError()
+
+  private async collectAllRegions(): Promise<RegionalTokenQuotes> {
+    this.validateCredentials()
+
+    let quotes: RegionalTokenQuotes
+
+    try {
+      const [eu, us] = await Promise.all([
+        this.battleNetClient.fetchQuote('eu'),
+        this.battleNetClient.fetchQuote('us'),
+      ])
+      quotes = { eu, us }
+    }
+    catch {
+      throw new TokenUpstreamError()
+    }
+
+    try {
+      this.historyStore.saveQuotes(quotes)
+    }
+    catch {
+      throw new TokenStorageError()
+    }
+
+    return quotes
+  }
+
+  private validateCredentials(): void {
+    if (
+      this.credentials.clientId.trim().length === 0
+      || this.credentials.clientSecret.trim().length === 0
+    ) {
+      throw new TokenConfigurationError()
+    }
   }
 }

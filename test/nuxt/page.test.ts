@@ -5,19 +5,27 @@ import IndexPage from '../../app/pages/index.vue'
 import type { WowTokenResponse } from '../../shared/types/wow-token'
 
 const response: WowTokenResponse = {
-  region: 'eu',
-  quote: {
-    priceGold: 286_250,
-    timestamp: '2026-08-01T12:00:00.000Z',
-    source: 'mock',
-  },
-  trend: {
-    period: '7d',
-    source: 'mock',
-    points: [
-      { timestamp: '2026-07-26T12:00:00.000Z', priceGold: 274_300 },
-      { timestamp: '2026-08-01T12:00:00.000Z', priceGold: 286_250 },
-    ],
+  regions: {
+    eu: {
+      quote: { priceGold: 286_250, timestamp: '2026-08-01T12:00:00.000Z' },
+      trend: {
+        period: '7d',
+        points: [
+          { timestamp: '2026-07-26T12:00:00.000Z', priceGold: 274_300 },
+          { timestamp: '2026-08-01T12:00:00.000Z', priceGold: 286_250 },
+        ],
+      },
+    },
+    us: {
+      quote: { priceGold: 331_400, timestamp: '2026-08-01T12:05:00.000Z' },
+      trend: {
+        period: '7d',
+        points: [
+          { timestamp: '2026-07-26T12:00:00.000Z', priceGold: 326_000 },
+          { timestamp: '2026-08-01T12:05:00.000Z', priceGold: 331_400 },
+        ],
+      },
+    },
   },
 }
 
@@ -39,7 +47,8 @@ describe('index page', () => {
     })
 
     expect(wrapper.get('[data-testid="page-container"]').classes()).toContain('max-w-5xl')
-    expect(wrapper.text()).toContain('بازار اروپا')
+    expect(wrapper.text()).toContain('بازار اروپا و آمریکا')
+    expect(wrapper.get('[data-testid="region-tab-eu"]').attributes('aria-selected')).toBe('true')
     expect(document.documentElement.lang).toBe('fa-IR')
     expect(document.documentElement.dir).toBe('rtl')
 

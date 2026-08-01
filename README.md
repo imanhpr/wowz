@@ -1,22 +1,40 @@
 # WoW Token Price
 
-A single-page Persian Nuxt application showing the EU World of Warcraft Token price and a clearly labeled seven-day demo trend.
+A single-page Persian Nuxt application showing live EU and US World of Warcraft Token prices with a seven-day history.
+
+## Requirements
+
+- Node.js with npm
+- A Battle.net application Client ID and Client Secret
+- One long-running Node server with persistent storage for the SQLite file
+
+The in-process hourly collector and local SQLite database are not suitable for serverless or multi-instance deployments.
 
 ## Setup
 
+Install dependencies, copy the environment template, and configure both Battle.net credentials:
+
 ```bash
 npm install
-npm run dev
+cp .env.example .env
 ```
-
-Without Battle.net credentials, the server returns deterministic demo data. To enable the live headline quote, copy `.env.example` to `.env` and set both server-only values:
 
 ```dotenv
 NUXT_BATTLENET_CLIENT_ID=your-client-id
 NUXT_BATTLENET_CLIENT_SECRET=your-client-secret
+NUXT_SQLITE_PATH=.data/wow-token.sqlite
 ```
 
-Battle.net exposes the latest token quote but not historical prices, so the chart remains explicitly marked as demo data in both modes.
+Create or update the SQLite schema before starting the application:
+
+```bash
+npm run db:migrate
+npm run dev
+```
+
+Both credentials are required. They remain in Nuxt's server-only runtime configuration and are never returned to the browser.
+
+The server collects EU and US quotes at startup, once per hour, and whenever the dashboard endpoint is requested. Quotes are deduplicated by region and Blizzard update timestamp and retained indefinitely; the UI displays the latest seven days.
 
 ## Validation
 

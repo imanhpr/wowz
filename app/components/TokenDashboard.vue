@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WowTokenResponse } from '../../shared/types/wow-token'
+import type { WowRegion, WowTokenResponse } from '../../shared/types/wow-token'
 import { formatGold, formatTokenDate } from '../utils/formatters'
 
 const props = withDefaults(defineProps<{
@@ -17,18 +17,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const activeRegion = ref<WowRegion>('eu')
 
 const isLoading = computed(() => props.status === 'idle' || props.status === 'pending')
 const hasError = computed(() => props.status === 'error' || props.error)
-
-const quoteSourceLabel = computed(() => (
-  props.data?.quote.source === 'battle-net'
-    ? t('quote.live')
-    : t('quote.mock')
-))
+const regionData = computed(() => props.data?.regions[activeRegion.value])
+const regionTabs: WowRegion[] = ['eu', 'us']
 
 const chartSummary = computed(() => {
-  const prices = props.data?.trend.points.map(point => point.priceGold) ?? []
+  const prices = regionData.value?.trend.points.map(point => point.priceGold) ?? []
 
   if (!prices.length) {
     return ''
@@ -101,10 +98,37 @@ const chartSummary = computed(() => {
         </template>
       </UAlert>
 
-      <section
-        v-else-if="data"
-        class="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]"
-      >
+      <template v-else-if="data && regionData">
+        <nav
+          class="mx-auto mb-5 flex w-fit rounded-xl border border-default bg-elevated/70 p-1"
+          role="tablist"
+          :aria-label="t('regions.label')"
+        >
+          <button
+            v-for="region in regionTabs"
+            :id="`region-tab-${region}`"
+            :key="region"
+            type="button"
+            role="tab"
+            :aria-selected="activeRegion === region"
+            :aria-controls="`region-panel-${region}`"
+            :data-testid="`region-tab-${region}`"
+            class="min-w-28 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors"
+            :class="activeRegion === region
+              ? 'bg-primary text-inverted shadow-sm'
+              : 'text-muted hover:text-highlighted'"
+            @click="activeRegion = region"
+          >
+            {{ t(`regions.${region}`) }}
+          </button>
+        </nav>
+
+        <section
+          :id="`region-panel-${activeRegion}`"
+          role="tabpanel"
+          :aria-labelledby="`region-tab-${activeRegion}`"
+          class="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]"
+        >
         <UCard class="warcraft-card h-full" data-testid="quote-card">
           <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -112,10 +136,10 @@ const chartSummary = computed(() => {
                 {{ t('quote.title') }}
               </h2>
               <UBadge
-                :color="data.quote.source === 'battle-net' ? 'success' : 'warning'"
+                color="success"
                 variant="subtle"
               >
-                {{ quoteSourceLabel }}
+                {{ t('quote.live') }}
               </UBadge>
             </div>
           </template>
@@ -123,7 +147,7 @@ const chartSummary = computed(() => {
           <div class="flex min-h-56 flex-col justify-center" aria-live="polite">
             <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span class="gold-text text-5xl font-black tabular-nums sm:text-6xl">
-                {{ formatGold(data.quote.priceGold) }}
+                {{ formatGold(regionData.quote.priceGold) }}
               </span>
               <span class="inline-flex items-center gap-1.5 text-xl font-bold text-muted">
                 <GoldCoinIcon class="size-5" />
@@ -132,8 +156,8 @@ const chartSummary = computed(() => {
             </p>
 
             <div class="mt-7 space-y-2 text-sm text-muted">
-              <p>{{ t('quote.region') }}</p>
-              <p>{{ t('quote.updatedAt', { date: formatTokenDate(data.quote.timestamp) }) }}</p>
+              <p>{{ t('quote.region', { region: t(`regions.${activeRegion}`) }) }}</p>
+              <p>{{ t('quote.updatedAt', { date: formatTokenDate(regionData.quote.timestamp) }) }}</p>
             </div>
           </div>
         </UCard>
@@ -150,19 +174,27 @@ const chartSummary = computed(() => {
                   {{ t('chart.description') }}
                 </p>
               </div>
-              <UBadge color="warning" variant="subtle">
-                {{ t('chart.demo') }}
+              <UBadge color="success" variant="subtle">
+                {{ t('chart.live') }}
               </UBadge>
             </div>
           </template>
 
-          <p class="sr-only">
+          <p v-if="regionData.trend.points.length >= 2" class="sr-only">
             {{ chartSummary }}
           </p>
 
-          <ClientOnly>
+          <div
+            v-if="regionData.trend.points.length < 2"
+            class="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-default bg-elevated/40 px-6 text-center text-sm leading-7 text-muted"
+            data-testid="history-collecting"
+          >
+            {{ t('chart.collecting') }}
+          </div>
+
+          <ClientOnly v-else>
             <TokenTrendChart
-              :points="data.trend.points"
+              :points="regionData.trend.points"
               :series-label="t('chart.series')"
             />
             <template #fallback>
@@ -170,7 +202,8 @@ const chartSummary = computed(() => {
             </template>
           </ClientOnly>
         </UCard>
-      </section>
+        </section>
+      </template>
 
       <footer class="mt-7 text-center text-xs leading-6 text-dimmed sm:mt-9 sm:text-sm">
         {{ t('footer') }}

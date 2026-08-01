@@ -34,6 +34,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     battlenetClientId: '',
     battlenetClientSecret: '',
+    sqlitePath: '.data/wow-token.sqlite',
   },
 
   app: {
@@ -46,7 +47,7 @@ export default defineNuxtConfig({
       meta: [
         {
           name: 'description',
-          content: 'نمایش قیمت روز توکن World of Warcraft در منطقه اروپا',
+          content: 'نمایش قیمت روز توکن World of Warcraft در مناطق اروپا و آمریکا',
         },
         { name: 'theme-color', content: '#081426' },
       ],
