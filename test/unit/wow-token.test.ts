@@ -228,7 +228,7 @@ describe('SQLite history repository', () => {
     temporaryDirectories.splice(0).forEach(directory => rmSync(directory, { recursive: true }))
   })
 
-  it('applies migrations, deduplicates observations, and returns ordered history after the cutoff', () => {
+  it('stores price changes while skipping consecutive duplicates and timestamp conflicts', () => {
     const directory = mkdtempSync(join(tmpdir(), 'wow-token-test-'))
     temporaryDirectories.push(directory)
     const database = createWowTokenDatabase(join(directory, 'history.sqlite'))
@@ -238,25 +238,45 @@ describe('SQLite history repository', () => {
     const repository = new WowTokenRepository(database.db, logger)
 
     repository.saveQuotes(quotes)
-    repository.saveQuotes(quotes)
     repository.saveQuotes({
-      eu: { priceGold: 270_000, timestamp: '2026-07-20T12:00:00.000Z' },
-      us: { priceGold: 320_000, timestamp: '2026-07-31T12:00:00.000Z' },
+      eu: { priceGold: 286_250, timestamp: '2026-08-01T13:00:00.000Z' },
+      us: { priceGold: 331_400, timestamp: '2026-08-01T13:05:00.000Z' },
+    })
+    repository.saveQuotes({
+      eu: { priceGold: 290_000, timestamp: '2026-08-01T14:00:00.000Z' },
+      us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
+    })
+    repository.saveQuotes({
+      eu: { priceGold: 295_000, timestamp: '2026-08-01T14:00:00.000Z' },
+      us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
+    })
+    repository.saveQuotes({
+      eu: { priceGold: 290_000, timestamp: '2026-08-01T15:00:00.000Z' },
+      us: { priceGold: 335_000, timestamp: '2026-08-01T15:05:00.000Z' },
+    })
+    repository.saveQuotes({
+      eu: { priceGold: 286_250, timestamp: '2026-08-01T16:00:00.000Z' },
+      us: { priceGold: 335_000, timestamp: '2026-08-01T16:05:00.000Z' },
     })
 
     expect(repository.getHistory('eu', new Date('2026-07-26T00:00:00.000Z'))).toEqual([
       quotes.eu,
+      { priceGold: 290_000, timestamp: '2026-08-01T14:00:00.000Z' },
+      { priceGold: 286_250, timestamp: '2026-08-01T16:00:00.000Z' },
     ])
     expect(repository.getHistory('us', new Date('2026-07-26T00:00:00.000Z'))).toEqual([
-      { priceGold: 320_000, timestamp: '2026-07-31T12:00:00.000Z' },
       quotes.us,
+      { priceGold: 335_000, timestamp: '2026-08-01T15:05:00.000Z' },
     ])
-    expect(logger.info).toHaveBeenCalledTimes(4)
+    expect(logger.info).toHaveBeenCalledTimes(5)
     expect(logger.info).toHaveBeenCalledWith(
       '[wow-token] Inserted EU price into database: priceGold=286250, timestamp=2026-08-01T12:00:00.000Z',
     )
     expect(logger.info).toHaveBeenCalledWith(
       '[wow-token] Inserted US price into database: priceGold=331400, timestamp=2026-08-01T12:05:00.000Z',
+    )
+    expect(logger.info).not.toHaveBeenCalledWith(
+      '[wow-token] Inserted EU price into database: priceGold=295000, timestamp=2026-08-01T14:00:00.000Z',
     )
   })
 })

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte } from 'drizzle-orm'
+import { and, asc, eq, gte, sql } from 'drizzle-orm'
 import type {
   RegionalTokenQuotes,
   TokenPricePoint,
@@ -31,14 +31,22 @@ export class WowTokenRepository implements TokenHistoryStore {
     this.db.transaction((transaction) => {
       for (const region of ['eu', 'us'] as const) {
         const quote = quotes[region]
+        const regionValue = sql.param(region, wowTokenPrices.region)
+        const priceValue = sql.param(quote.priceGold, wowTokenPrices.priceGold)
+        const timestampValue = sql.param(new Date(quote.timestamp), wowTokenPrices.timestamp)
 
         const result = transaction
           .insert(wowTokenPrices)
-          .values({
-            region,
-            priceGold: quote.priceGold,
-            timestamp: new Date(quote.timestamp),
-          })
+          .select(sql`
+            select null, ${regionValue}, ${priceValue}, ${timestampValue}
+            where (
+              select ${wowTokenPrices.priceGold}
+              from ${wowTokenPrices}
+              where ${wowTokenPrices.region} = ${regionValue}
+              order by ${wowTokenPrices.timestamp} desc
+              limit 1
+            ) is not ${priceValue}
+          `)
           .onConflictDoNothing({
             target: [wowTokenPrices.region, wowTokenPrices.timestamp],
           })
