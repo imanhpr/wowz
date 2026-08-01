@@ -12,7 +12,7 @@ export default defineEventHandler(async () => {
   }, $fetch as unknown as HttpClient)
 
   try {
-    return await runtime.service.getDashboardData()
+    return await runtime.refresh()
   }
   catch (error) {
     throw createWowTokenHttpError(error)

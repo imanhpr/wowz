@@ -22,6 +22,15 @@ import {
   COLLECTION_INTERVAL_MS,
   startWowTokenScheduler,
 } from '../../server/utils/wow-token-scheduler'
+import {
+  createWowTokenSnapshotId,
+  WowTokenStreamHub,
+} from '../../server/utils/wow-token-stream-hub'
+import {
+  attachWowTokenEventStream,
+  WOW_TOKEN_HEARTBEAT_INTERVAL_MS,
+  WOW_TOKEN_RETRY_MS,
+} from '../../server/utils/wow-token-sse'
 import type { RegionalTokenQuotes, WowRegion } from '../../shared/types/wow-token'
 
 const credentials = {
@@ -54,7 +63,7 @@ function createClientMock(overrides: Partial<Record<WowRegion, Error>> = {}) {
 
 function createStoreMock(): TokenHistoryStore {
   return {
-    saveQuotes: vi.fn(),
+    saveQuotes: vi.fn(() => ['eu', 'us']),
     getHistory: vi.fn((region: WowRegion) => [quotes[region]]),
   }
 }
@@ -153,10 +162,31 @@ describe('WoW Token service', () => {
     const store = createStoreMock()
     const service = new WowTokenService(credentials, client, store)
 
-    await expect(service.collect()).resolves.toEqual(quotes)
+    await expect(service.collect()).resolves.toMatchObject({
+      quotes,
+      changedRegions: ['eu', 'us'],
+      dashboard: {
+        regions: {
+          eu: { quote: quotes.eu },
+          us: { quote: quotes.us },
+        },
+      },
+    })
     expect(client.fetchQuote).toHaveBeenCalledTimes(2)
     expect(store.saveQuotes).toHaveBeenCalledOnce()
     expect(store.saveQuotes).toHaveBeenCalledWith(quotes)
+  })
+
+  it('coalesces overlapping dashboard collections', async () => {
+    const client = createClientMock()
+    const service = new WowTokenService(credentials, client, createStoreMock())
+
+    const firstCollection = service.collect()
+    const secondCollection = service.collect()
+
+    expect(secondCollection).toBe(firstCollection)
+    await Promise.all([firstCollection, secondCollection])
+    expect(client.fetchQuote).toHaveBeenCalledTimes(2)
   })
 
   it('persists nothing and sanitizes details when either regional request fails', async () => {
@@ -237,27 +267,27 @@ describe('SQLite history repository', () => {
     const logger = { info: vi.fn() }
     const repository = new WowTokenRepository(database.db, logger)
 
-    repository.saveQuotes(quotes)
-    repository.saveQuotes({
+    expect(repository.saveQuotes(quotes)).toEqual(['eu', 'us'])
+    expect(repository.saveQuotes({
       eu: { priceGold: 286_250, timestamp: '2026-08-01T13:00:00.000Z' },
       us: { priceGold: 331_400, timestamp: '2026-08-01T13:05:00.000Z' },
-    })
-    repository.saveQuotes({
+    })).toEqual([])
+    expect(repository.saveQuotes({
       eu: { priceGold: 290_000, timestamp: '2026-08-01T14:00:00.000Z' },
       us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
-    })
-    repository.saveQuotes({
+    })).toEqual(['eu'])
+    expect(repository.saveQuotes({
       eu: { priceGold: 295_000, timestamp: '2026-08-01T14:00:00.000Z' },
       us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
-    })
-    repository.saveQuotes({
+    })).toEqual([])
+    expect(repository.saveQuotes({
       eu: { priceGold: 290_000, timestamp: '2026-08-01T15:00:00.000Z' },
       us: { priceGold: 335_000, timestamp: '2026-08-01T15:05:00.000Z' },
-    })
-    repository.saveQuotes({
+    })).toEqual(['us'])
+    expect(repository.saveQuotes({
       eu: { priceGold: 286_250, timestamp: '2026-08-01T16:00:00.000Z' },
       us: { priceGold: 335_000, timestamp: '2026-08-01T16:05:00.000Z' },
-    })
+    })).toEqual(['eu'])
 
     expect(repository.getHistory('eu', new Date('2026-07-26T00:00:00.000Z'))).toEqual([
       quotes.eu,
@@ -281,8 +311,8 @@ describe('SQLite history repository', () => {
   })
 })
 
-describe('hourly collector', () => {
-  it('runs immediately, repeats hourly, and stops cleanly', async () => {
+describe('minute collector', () => {
+  it('runs immediately, repeats every minute, and stops cleanly', async () => {
     let intervalCallback!: () => void
     const timer = { unref: vi.fn() } as unknown as ReturnType<typeof setInterval>
     const clock = {
@@ -345,5 +375,122 @@ describe('hourly collector', () => {
     expect(collect).toHaveBeenCalledTimes(3)
     expect(logger.info).toHaveBeenCalledWith('[wow-token] Scheduled collection completed successfully')
     stop()
+  })
+})
+
+describe('WoW Token stream hub', () => {
+  const dashboard = {
+    regions: {
+      eu: {
+        quote: quotes.eu,
+        trend: { period: '7d' as const, points: [quotes.eu] },
+      },
+      us: {
+        quote: quotes.us,
+        trend: { period: '7d' as const, points: [quotes.us] },
+      },
+    },
+  }
+
+  it('replays the latest full snapshot and removes disconnected subscribers', () => {
+    const hub = new WowTokenStreamHub()
+    const subscriber = vi.fn()
+    hub.update(dashboard, false)
+
+    const unsubscribe = hub.subscribe(subscriber)
+
+    expect(subscriber).toHaveBeenCalledOnce()
+    expect(subscriber).toHaveBeenCalledWith({
+      id: createWowTokenSnapshotId(dashboard),
+      data: dashboard,
+    })
+
+    unsubscribe()
+    hub.update(structuredClone(dashboard), true)
+    expect(subscriber).toHaveBeenCalledOnce()
+  })
+
+  it('seeds on unchanged collections and deduplicates concurrent broadcasts', () => {
+    const hub = new WowTokenStreamHub()
+    const subscriber = vi.fn()
+    hub.subscribe(subscriber)
+
+    hub.update(dashboard, false)
+    expect(subscriber).not.toHaveBeenCalled()
+
+    hub.update(dashboard, true)
+    hub.update(structuredClone(dashboard), true)
+    expect(subscriber).toHaveBeenCalledOnce()
+
+    const changedDashboard = structuredClone(dashboard)
+    changedDashboard.regions.eu.quote = {
+      priceGold: 290_000,
+      timestamp: '2026-08-01T13:00:00.000Z',
+    }
+    hub.update(changedDashboard, true)
+    expect(subscriber).toHaveBeenCalledTimes(2)
+
+    hub.clear()
+    expect(hub.hasSnapshot).toBe(false)
+  })
+
+  it('formats price and heartbeat events and cleans up a closed connection', () => {
+    let heartbeat!: () => void
+    let onClosed!: () => void
+    const timer = { unref: vi.fn() } as unknown as ReturnType<typeof setInterval>
+    const clock = {
+      setInterval: vi.fn((callback: () => void) => {
+        heartbeat = callback
+        return timer
+      }),
+      clearInterval: vi.fn(),
+    }
+    const eventStream = {
+      push: vi.fn().mockResolvedValue(undefined),
+      onClosed: vi.fn((callback: () => void) => {
+        onClosed = callback
+      }),
+    }
+    const hub = new WowTokenStreamHub()
+    hub.update(dashboard, false)
+
+    attachWowTokenEventStream(eventStream, hub, clock)
+
+    expect(clock.setInterval).toHaveBeenCalledWith(
+      expect.any(Function),
+      WOW_TOKEN_HEARTBEAT_INTERVAL_MS,
+    )
+    expect(timer.unref).toHaveBeenCalledOnce()
+    expect(eventStream.push).toHaveBeenCalledWith({
+      id: createWowTokenSnapshotId(dashboard),
+      event: 'price',
+      retry: WOW_TOKEN_RETRY_MS,
+      data: JSON.stringify(dashboard),
+    })
+
+    heartbeat()
+    expect(eventStream.push).toHaveBeenLastCalledWith({
+      event: 'heartbeat',
+      data: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    })
+
+    onClosed()
+    onClosed()
+    expect(clock.clearInterval).toHaveBeenCalledOnce()
+    expect(clock.clearInterval).toHaveBeenCalledWith(timer)
+
+    const callsAfterClose = eventStream.push.mock.calls.length
+    hub.update({
+      ...dashboard,
+      regions: {
+        ...dashboard.regions,
+        eu: {
+          ...dashboard.regions.eu,
+          quote: { priceGold: 300_000, timestamp: '2026-08-01T14:00:00.000Z' },
+        },
+      },
+    }, true)
+    heartbeat()
+    expect(eventStream.push).toHaveBeenCalledTimes(callsAfterClose)
   })
 })

@@ -58,8 +58,7 @@ describe('TokenDashboard', () => {
     expect(wrapper.text()).toContain('۳۳۱٬۴۰۰')
     expect(wrapper.text()).toContain('منطقه اروپا')
     expect(wrapper.text()).toContain('منطقه آمریکا')
-    expect(wrapper.text()).toContain('داده زنده بتل‌نت')
-    expect(wrapper.text()).toContain('روند واقعی')
+    expect(wrapper.text()).toContain('جریان قیمت زنده')
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
     expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="quote-grid"]').classes()).toEqual(expect.arrayContaining([
@@ -84,6 +83,32 @@ describe('TokenDashboard', () => {
     expect(wrapper.findAll('[data-testid="live-pulse-indicator"]')).toHaveLength(3)
     expect(wrapper.findAll('[data-testid="live-pulse-indicator"]').every(indicator => indicator.attributes('aria-hidden') === 'true')).toBe(true)
     expect(wrapper.findAll('.motion-safe\\:animate-ping')).toHaveLength(3)
+  })
+
+  it.each([
+    ['connecting', 'در حال اتصال به جریان زنده', 'neutral'],
+    ['reconnecting', 'در حال اتصال دوباره', 'warning'],
+    ['error', 'جریان قیمت قطع است', 'error'],
+  ] as const)('renders the %s stream state without a live pulse', async (streamStatus, label, color) => {
+    const wrapper = await mountSuspended(TokenDashboard, {
+      props: {
+        data: response,
+        status: 'success',
+        streamStatus,
+      },
+      global: {
+        stubs: {
+          TokenTrendChart: true,
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain(label)
+    expect(wrapper.findAll('[data-testid="live-pulse-indicator"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="live-pulse-indicator"]')
+      .every(indicator => indicator.attributes('data-status') === streamStatus)).toBe(true)
+    expect(wrapper.findAll('.motion-safe\\:animate-ping')).toHaveLength(0)
+    expect(wrapper.findAll(`[data-stream-color="${color}"]`)).toHaveLength(3)
   })
 
   it('shows a collecting state until both regions have two historical observations', async () => {

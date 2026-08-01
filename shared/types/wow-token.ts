@@ -1,5 +1,7 @@
 export type WowRegion = 'eu' | 'us'
 
+export type WowTokenStreamStatus = 'connecting' | 'live' | 'reconnecting' | 'error'
+
 export interface TokenPricePoint {
   timestamp: string
   priceGold: number

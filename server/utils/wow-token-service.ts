@@ -1,5 +1,6 @@
 import type {
   RegionalTokenQuotes,
+  WowRegion,
   WowTokenResponse,
 } from '../../shared/types/wow-token'
 import type { TokenHistoryStore } from '../database/wow-token-repository'
@@ -28,8 +29,14 @@ export class TokenStorageError extends Error {
   }
 }
 
+export interface WowTokenCollectionResult {
+  quotes: RegionalTokenQuotes
+  changedRegions: WowRegion[]
+  dashboard: WowTokenResponse
+}
+
 export class WowTokenService {
-  private activeCollection: Promise<RegionalTokenQuotes> | null = null
+  private activeCollection: Promise<WowTokenCollectionResult> | null = null
 
   constructor(
     private readonly credentials: BattleNetCredentials,
@@ -37,12 +44,12 @@ export class WowTokenService {
     private readonly historyStore: TokenHistoryStore,
   ) {}
 
-  collect(): Promise<RegionalTokenQuotes> {
+  collect(now = new Date()): Promise<WowTokenCollectionResult> {
     if (this.activeCollection) {
       return this.activeCollection
     }
 
-    this.activeCollection = this.collectAllRegions()
+    this.activeCollection = this.collectAllRegions(now)
       .finally(() => {
         this.activeCollection = null
       })
@@ -51,7 +58,13 @@ export class WowTokenService {
   }
 
   async getDashboardData(now = new Date()): Promise<WowTokenResponse> {
-    const quotes = await this.collect()
+    return (await this.collect(now)).dashboard
+  }
+
+  private buildDashboardData(
+    quotes: RegionalTokenQuotes,
+    now: Date,
+  ): WowTokenResponse {
     const since = new Date(now.getTime() - HISTORY_WINDOW_MS)
 
     try {
@@ -79,7 +92,7 @@ export class WowTokenService {
     }
   }
 
-  private async collectAllRegions(): Promise<RegionalTokenQuotes> {
+  private async collectAllRegions(now: Date): Promise<WowTokenCollectionResult> {
     this.validateCredentials()
 
     let quotes: RegionalTokenQuotes
@@ -95,14 +108,20 @@ export class WowTokenService {
       throw new TokenUpstreamError()
     }
 
+    let changedRegions: WowRegion[]
+
     try {
-      this.historyStore.saveQuotes(quotes)
+      changedRegions = this.historyStore.saveQuotes(quotes)
     }
     catch {
       throw new TokenStorageError()
     }
 
-    return quotes
+    return {
+      quotes,
+      changedRegions,
+      dashboard: this.buildDashboardData(quotes, now),
+    }
   }
 
   private validateCredentials(): void {

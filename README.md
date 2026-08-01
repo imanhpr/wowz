@@ -34,7 +34,9 @@ npm run dev
 
 Both credentials are required. They remain in Nuxt's server-only runtime configuration and are never returned to the browser.
 
-The server collects EU and US quotes at startup, once per hour, and whenever the dashboard endpoint is requested. Quotes are deduplicated by region and Blizzard update timestamp and retained indefinitely; the UI displays the latest seven days.
+The server collects EU and US quotes at startup, once per minute, and whenever the dashboard endpoint is requested. Quotes are deduplicated by region and Blizzard update timestamp and retained indefinitely; the UI displays the latest seven days.
+
+The initial dashboard is server-rendered from `GET /api/wow-token`. After hydration, the browser connects to `GET /api/wow-token/stream` using Server-Sent Events. The stream immediately sends the current dashboard snapshot and pushes a new full snapshot whenever either regional price changes. This in-memory stream fan-out shares the same single-process deployment constraint as the collector and SQLite database.
 
 ## Validation
 

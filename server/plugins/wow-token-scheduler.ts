@@ -9,7 +9,7 @@ export default defineNitroPlugin((nitroApp) => {
     battlenetClientSecret: config.battlenetClientSecret,
     sqlitePath: config.sqlitePath,
   }, $fetch as unknown as HttpClient)
-  const stopScheduler = startWowTokenScheduler(() => runtime.service.collect())
+  const stopScheduler = startWowTokenScheduler(() => runtime.refresh())
 
   nitroApp.hooks.hook('close', () => {
     stopScheduler()

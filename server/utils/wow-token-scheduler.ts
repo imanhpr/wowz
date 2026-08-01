@@ -1,4 +1,4 @@
-const COLLECTION_INTERVAL_MS = 60 * 60 * 1_000
+const COLLECTION_INTERVAL_MS = 60 * 1_000
 
 interface SchedulerLogger {
   info(message: string): void

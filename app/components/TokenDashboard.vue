@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import type { WowTokenResponse } from '../../shared/types/wow-token'
+import type {
+  WowTokenResponse,
+  WowTokenStreamStatus,
+} from '../../shared/types/wow-token'
 import { formatGold, formatRelativeTime, formatTokenDate } from '../utils/formatters'
 
 const props = withDefaults(defineProps<{
   data?: WowTokenResponse | null
   status?: 'idle' | 'pending' | 'success' | 'error'
   error?: boolean
+  streamStatus?: WowTokenStreamStatus
 }>(), {
   data: null,
   status: 'idle',
   error: false,
+  streamStatus: 'live',
 })
 
 const emit = defineEmits<{
@@ -36,6 +41,12 @@ onUnmounted(() => {
 
 const isLoading = computed(() => props.status === 'idle' || props.status === 'pending')
 const hasError = computed(() => props.status === 'error' || props.error)
+const streamBadgeColor = computed(() => ({
+  connecting: 'neutral',
+  live: 'success',
+  reconnecting: 'warning',
+  error: 'error',
+} as const)[props.streamStatus])
 const isChartReady = computed(() => regions.every(
   region => (props.data?.regions[region].trend.points.length ?? 0) >= 2,
 ))
@@ -141,12 +152,14 @@ const chartSummaries = computed(() => regions.flatMap((region) => {
                     {{ t('quote.title', { region: t(`regions.${region}`) }) }}
                   </h2>
                   <UBadge
-                    color="success"
+                    :color="streamBadgeColor"
                     variant="subtle"
                     class="gap-2"
+                    :data-stream-status="streamStatus"
+                    :data-stream-color="streamBadgeColor"
                   >
-                    <LivePulseIndicator />
-                    {{ t('quote.live') }}
+                    <LivePulseIndicator :status="streamStatus" />
+                    {{ t(`stream.${streamStatus}`) }}
                   </UBadge>
                 </div>
               </template>
@@ -187,9 +200,15 @@ const chartSummaries = computed(() => regions.flatMap((region) => {
                     {{ t('chart.description') }}
                   </p>
                 </div>
-                <UBadge color="success" variant="subtle" class="gap-2">
-                  <LivePulseIndicator />
-                  {{ t('chart.live') }}
+                <UBadge
+                  :color="streamBadgeColor"
+                  variant="subtle"
+                  class="gap-2"
+                  :data-stream-status="streamStatus"
+                  :data-stream-color="streamBadgeColor"
+                >
+                  <LivePulseIndicator :status="streamStatus" />
+                  {{ t(`stream.${streamStatus}`) }}
                 </UBadge>
               </div>
             </template>

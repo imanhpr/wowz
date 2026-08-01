@@ -8,7 +8,7 @@ import type { WowTokenDatabase } from './client'
 import { wowTokenPrices } from './schema'
 
 export interface TokenHistoryStore {
-  saveQuotes(quotes: RegionalTokenQuotes): void
+  saveQuotes(quotes: RegionalTokenQuotes): WowRegion[]
   getHistory(region: WowRegion, since: Date): TokenPricePoint[]
 }
 
@@ -22,7 +22,7 @@ export class WowTokenRepository implements TokenHistoryStore {
     private readonly logger: RepositoryLogger = console,
   ) {}
 
-  saveQuotes(quotes: RegionalTokenQuotes): void {
+  saveQuotes(quotes: RegionalTokenQuotes): WowRegion[] {
     const insertedQuotes: Array<{
       region: WowRegion
       quote: TokenPricePoint
@@ -63,6 +63,8 @@ export class WowTokenRepository implements TokenHistoryStore {
         `[wow-token] Inserted ${region.toUpperCase()} price into database: priceGold=${quote.priceGold}, timestamp=${quote.timestamp}`,
       )
     }
+
+    return insertedQuotes.map(({ region }) => region)
   }
 
   getHistory(region: WowRegion, since: Date): TokenPricePoint[] {
