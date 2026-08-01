@@ -12,7 +12,7 @@
   "quote": {
     "title": "قیمت فعلی توکن",
     "gold": "طلا",
-    "updatedAt": "آخرین به‌روزرسانی: {date}",
+    "updatedAt": "آخرین به‌روزرسانی: {date} - ({relative})",
     "region": "منطقه {region}",
     "live": "داده زنده بتل‌نت"
   },

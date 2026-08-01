@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { WowRegion, WowTokenResponse } from '../../shared/types/wow-token'
-import { formatGold, formatTokenDate } from '../utils/formatters'
+import { formatGold, formatRelativeTime, formatTokenDate } from '../utils/formatters'
 
 const props = withDefaults(defineProps<{
   data?: WowTokenResponse | null
@@ -18,6 +18,21 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const activeRegion = ref<WowRegion>('eu')
+const currentTime = useState('token-dashboard-current-time', () => Date.now())
+let relativeTimeTimer: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  currentTime.value = Date.now()
+  relativeTimeTimer = setInterval(() => {
+    currentTime.value = Date.now()
+  }, 60_000)
+})
+
+onUnmounted(() => {
+  if (relativeTimeTimer) {
+    clearInterval(relativeTimeTimer)
+  }
+})
 
 const isLoading = computed(() => props.status === 'idle' || props.status === 'pending')
 const hasError = computed(() => props.status === 'error' || props.error)
@@ -157,7 +172,12 @@ const chartSummary = computed(() => {
 
             <div class="mt-7 space-y-2 text-sm text-muted">
               <p>{{ t('quote.region', { region: t(`regions.${activeRegion}`) }) }}</p>
-              <p>{{ t('quote.updatedAt', { date: formatTokenDate(regionData.quote.timestamp) }) }}</p>
+              <p>
+                {{ t('quote.updatedAt', {
+                  date: formatTokenDate(regionData.quote.timestamp),
+                  relative: formatRelativeTime(regionData.quote.timestamp, currentTime),
+                }) }}
+              </p>
             </div>
           </div>
         </UCard>
