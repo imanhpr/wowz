@@ -1,6 +1,7 @@
 const COLLECTION_INTERVAL_MS = 60 * 60 * 1_000
 
 interface SchedulerLogger {
+  info(message: string): void
   error(message: string): void
 }
 
@@ -27,9 +28,11 @@ export function startWowTokenScheduler(
     }
 
     isRunning = true
+    logger.info('[wow-token] Scheduled collection started')
 
     try {
       await collect()
+      logger.info('[wow-token] Scheduled collection completed successfully')
     }
     catch {
       logger.error('Scheduled WoW Token collection failed')

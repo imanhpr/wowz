@@ -234,7 +234,8 @@ describe('SQLite history repository', () => {
     const database = createWowTokenDatabase(join(directory, 'history.sqlite'))
     closeDatabases.push(database.close)
     migrate(database.db, { migrationsFolder: resolve('drizzle') })
-    const repository = new WowTokenRepository(database.db)
+    const logger = { info: vi.fn() }
+    const repository = new WowTokenRepository(database.db, logger)
 
     repository.saveQuotes(quotes)
     repository.saveQuotes(quotes)
@@ -250,6 +251,13 @@ describe('SQLite history repository', () => {
       { priceGold: 320_000, timestamp: '2026-07-31T12:00:00.000Z' },
       quotes.us,
     ])
+    expect(logger.info).toHaveBeenCalledTimes(4)
+    expect(logger.info).toHaveBeenCalledWith(
+      '[wow-token] Inserted EU price into database: priceGold=286250, timestamp=2026-08-01T12:00:00.000Z',
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      '[wow-token] Inserted US price into database: priceGold=331400, timestamp=2026-08-01T12:05:00.000Z',
+    )
   })
 })
 
@@ -296,7 +304,7 @@ describe('hourly collector', () => {
       .mockReturnValueOnce(first)
       .mockRejectedValueOnce(new Error('upstream'))
       .mockResolvedValue(undefined)
-    const logger = { error: vi.fn() }
+    const logger = { info: vi.fn(), error: vi.fn() }
     const stop = startWowTokenScheduler(collect, logger, clock)
 
     intervalCallback()
@@ -310,10 +318,12 @@ describe('hourly collector', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(logger.error).toHaveBeenCalledOnce()
+    expect(logger.info).toHaveBeenCalledWith('[wow-token] Scheduled collection started')
 
     intervalCallback()
     await Promise.resolve()
     expect(collect).toHaveBeenCalledTimes(3)
+    expect(logger.info).toHaveBeenCalledWith('[wow-token] Scheduled collection completed successfully')
     stop()
   })
 })

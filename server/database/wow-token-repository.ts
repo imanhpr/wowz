@@ -12,15 +12,27 @@ export interface TokenHistoryStore {
   getHistory(region: WowRegion, since: Date): TokenPricePoint[]
 }
 
+interface RepositoryLogger {
+  info(message: string): void
+}
+
 export class WowTokenRepository implements TokenHistoryStore {
-  constructor(private readonly db: WowTokenDatabase) {}
+  constructor(
+    private readonly db: WowTokenDatabase,
+    private readonly logger: RepositoryLogger = console,
+  ) {}
 
   saveQuotes(quotes: RegionalTokenQuotes): void {
+    const insertedQuotes: Array<{
+      region: WowRegion
+      quote: TokenPricePoint
+    }> = []
+
     this.db.transaction((transaction) => {
       for (const region of ['eu', 'us'] as const) {
         const quote = quotes[region]
 
-        transaction
+        const result = transaction
           .insert(wowTokenPrices)
           .values({
             region,
@@ -31,8 +43,18 @@ export class WowTokenRepository implements TokenHistoryStore {
             target: [wowTokenPrices.region, wowTokenPrices.timestamp],
           })
           .run()
+
+        if (result.changes > 0) {
+          insertedQuotes.push({ region, quote })
+        }
       }
     })
+
+    for (const { region, quote } of insertedQuotes) {
+      this.logger.info(
+        `[wow-token] Inserted ${region.toUpperCase()} price into database: priceGold=${quote.priceGold}, timestamp=${quote.timestamp}`,
+      )
+    }
   }
 
   getHistory(region: WowRegion, since: Date): TokenPricePoint[] {
