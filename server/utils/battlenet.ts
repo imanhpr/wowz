@@ -59,6 +59,19 @@ function getHttpErrorResponseBody(error: unknown): unknown {
   return isRecord(error.response) ? error.response._data : undefined
 }
 
+function logRawBattleNetError(
+  region: WowRegion,
+  requestKind: BattleNetRequestKind,
+  error: unknown,
+): void {
+  console.error('[battle.net] Request failed', {
+    region,
+    requestKind,
+    statusCode: getHttpErrorStatus(error),
+    response: getHttpErrorResponseBody(error),
+  })
+}
+
 function formatResponseBody(body: unknown): string {
   if (body === undefined) {
     return '<unavailable>'
@@ -146,6 +159,7 @@ export class BattleNetClient implements BattleNetQuoteClient {
       })
     }
     catch (error) {
+      logRawBattleNetError(region, 'quote', error)
       throw new BattleNetRequestError(region, 'quote', error)
     }
 
@@ -195,6 +209,7 @@ export class BattleNetClient implements BattleNetQuoteClient {
       })
     }
     catch (error) {
+      logRawBattleNetError(region, 'OAuth', error)
       throw new BattleNetRequestError(region, 'OAuth', error)
     }
 
