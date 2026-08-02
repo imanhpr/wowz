@@ -37,6 +37,7 @@ export async function createWowTokenDatabase(
 
   try {
     await migrate(db, { migrationsFolder })
+    console.info('[database] Connected to PostgreSQL successfully')
   }
   catch (error) {
     await client.end()
