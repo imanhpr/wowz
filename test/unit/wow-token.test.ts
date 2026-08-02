@@ -1,8 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createWowTokenDatabase } from '../../server/database/client'
+import { describe, expect, it, vi } from 'vitest'
+import type { WowTokenDatabase } from '../../server/database/client'
+import { readDatabaseConfig } from '../../server/database/config'
 import { WowTokenRepository, type TokenHistoryStore } from '../../server/database/wow-token-repository'
 import {
   BattleNetClient,
@@ -62,8 +60,8 @@ function createClientMock(overrides: Partial<Record<WowRegion, Error>> = {}) {
 
 function createStoreMock(): TokenHistoryStore {
   return {
-    saveQuotes: vi.fn(() => ['eu', 'us']),
-    getHistory: vi.fn((region: WowRegion) => [quotes[region]]),
+    saveQuotes: vi.fn(async () => ['eu', 'us']),
+    getHistory: vi.fn(async (region: WowRegion) => [quotes[region]]),
   }
 }
 
@@ -215,14 +213,12 @@ describe('WoW Token service', () => {
 
   it('sanitizes database failures', async () => {
     const store = createStoreMock()
-    vi.mocked(store.saveQuotes).mockImplementation(() => {
-      throw new Error('private sqlite details')
-    })
+    vi.mocked(store.saveQuotes).mockRejectedValue(new Error('private postgres details'))
     const service = new WowTokenService(credentials, createClientMock(), store)
     const request = service.collect()
 
     await expect(request).rejects.toBeInstanceOf(TokenStorageError)
-    await expect(request).rejects.not.toThrow('private sqlite details')
+    await expect(request).rejects.not.toThrow('private postgres details')
   })
 })
 
@@ -248,64 +244,86 @@ describe('WoW Token API errors', () => {
   })
 })
 
-describe('SQLite history repository', () => {
-  const temporaryDirectories: string[] = []
-  const closeDatabases: Array<() => void> = []
-
-  afterEach(() => {
-    closeDatabases.splice(0).forEach(close => close())
-    temporaryDirectories.splice(0).forEach(directory => rmSync(directory, { recursive: true }))
-  })
-
-  it('stores price changes while skipping consecutive duplicates and timestamp conflicts', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'wow-token-test-'))
-    temporaryDirectories.push(directory)
-    const database = createWowTokenDatabase(join(directory, 'history.sqlite'))
-    closeDatabases.push(database.close)
+describe('PostgreSQL history repository', () => {
+  it('returns inserted regions and maps timestamp values to API strings', async () => {
+    const execute = vi.fn()
+      .mockResolvedValueOnce([{ region: 'eu' }])
+      .mockResolvedValueOnce([{ region: 'us' }])
+    const orderBy = vi.fn()
+      .mockResolvedValueOnce([{
+        priceGold: quotes.eu.priceGold,
+        timestamp: new Date(quotes.eu.timestamp),
+      }])
+      .mockResolvedValueOnce([{
+        priceGold: quotes.us.priceGold,
+        timestamp: new Date(quotes.us.timestamp),
+      }])
+    const where = vi.fn(() => ({ orderBy }))
+    const from = vi.fn(() => ({ where }))
+    const select = vi.fn(() => ({ from }))
+    const transaction = vi.fn(async (
+      callback: (value: { execute: typeof execute }) => Promise<void>,
+    ) => callback({ execute }))
+    const database = { select, transaction } as unknown as WowTokenDatabase
     const logger = { info: vi.fn() }
-    const repository = new WowTokenRepository(database.db, logger)
+    const repository = new WowTokenRepository(database, logger)
 
-    expect(repository.saveQuotes(quotes)).toEqual(['eu', 'us'])
-    expect(repository.saveQuotes({
-      eu: { priceGold: 286_250, timestamp: '2026-08-01T13:00:00.000Z' },
-      us: { priceGold: 331_400, timestamp: '2026-08-01T13:05:00.000Z' },
-    })).toEqual([])
-    expect(repository.saveQuotes({
-      eu: { priceGold: 290_000, timestamp: '2026-08-01T14:00:00.000Z' },
-      us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
-    })).toEqual(['eu'])
-    expect(repository.saveQuotes({
-      eu: { priceGold: 295_000, timestamp: '2026-08-01T14:00:00.000Z' },
-      us: { priceGold: 331_400, timestamp: '2026-08-01T14:05:00.000Z' },
-    })).toEqual([])
-    expect(repository.saveQuotes({
-      eu: { priceGold: 290_000, timestamp: '2026-08-01T15:00:00.000Z' },
-      us: { priceGold: 335_000, timestamp: '2026-08-01T15:05:00.000Z' },
-    })).toEqual(['us'])
-    expect(repository.saveQuotes({
-      eu: { priceGold: 286_250, timestamp: '2026-08-01T16:00:00.000Z' },
-      us: { priceGold: 335_000, timestamp: '2026-08-01T16:05:00.000Z' },
-    })).toEqual(['eu'])
-
-    expect(repository.getHistory('eu', new Date('2026-07-26T00:00:00.000Z'))).toEqual([
-      quotes.eu,
-      { priceGold: 290_000, timestamp: '2026-08-01T14:00:00.000Z' },
-      { priceGold: 286_250, timestamp: '2026-08-01T16:00:00.000Z' },
-    ])
-    expect(repository.getHistory('us', new Date('2026-07-26T00:00:00.000Z'))).toEqual([
-      quotes.us,
-      { priceGold: 335_000, timestamp: '2026-08-01T15:05:00.000Z' },
-    ])
-    expect(logger.info).toHaveBeenCalledTimes(5)
+    await expect(repository.saveQuotes(quotes)).resolves.toEqual(['eu', 'us'])
+    await expect(repository.getHistory(
+      'eu',
+      new Date('2026-07-26T00:00:00.000Z'),
+    )).resolves.toEqual([quotes.eu])
+    await expect(repository.getHistory(
+      'us',
+      new Date('2026-07-26T00:00:00.000Z'),
+    )).resolves.toEqual([quotes.us])
+    expect(transaction).toHaveBeenCalledOnce()
+    expect(execute).toHaveBeenCalledTimes(2)
+    expect(logger.info).toHaveBeenCalledTimes(2)
     expect(logger.info).toHaveBeenCalledWith(
       '[wow-token] Inserted EU price into database: priceGold=286250, timestamp=2026-08-01T12:00:00.000Z',
     )
     expect(logger.info).toHaveBeenCalledWith(
       '[wow-token] Inserted US price into database: priceGold=331400, timestamp=2026-08-01T12:05:00.000Z',
     )
-    expect(logger.info).not.toHaveBeenCalledWith(
-      '[wow-token] Inserted EU price into database: priceGold=295000, timestamp=2026-08-01T14:00:00.000Z',
-    )
+  })
+})
+
+describe('PostgreSQL environment configuration', () => {
+  it('prefers DATABASE_URL over individual connection values', () => {
+    expect(readDatabaseConfig({
+      DATABASE_URL: 'postgresql://user:password@database.example/wowz',
+      DATABASE_HOST: 'ignored',
+    })).toEqual({
+      url: 'postgresql://user:password@database.example/wowz',
+    })
+  })
+
+  it('reads individual connection values when DATABASE_URL is empty', () => {
+    expect(readDatabaseConfig({
+      DATABASE_HOST: 'database.example',
+      DATABASE_NAME: 'wowz',
+      DATABASE_PASSWORD: 'secret',
+      DATABASE_PORT: '5433',
+      DATABASE_URL: '',
+      DATABASE_USER: 'wowz-app',
+    })).toEqual({
+      host: 'database.example',
+      database: 'wowz',
+      password: 'secret',
+      port: 5433,
+      user: 'wowz-app',
+    })
+  })
+
+  it('rejects an invalid DATABASE_PORT', () => {
+    expect(() => readDatabaseConfig({
+      DATABASE_HOST: 'database.example',
+      DATABASE_NAME: 'wowz',
+      DATABASE_PASSWORD: 'secret',
+      DATABASE_PORT: 'invalid',
+      DATABASE_USER: 'wowz-app',
+    })).toThrow('DATABASE_PORT')
   })
 })
 

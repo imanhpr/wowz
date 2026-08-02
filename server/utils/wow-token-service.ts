@@ -61,27 +61,32 @@ export class WowTokenService {
     return (await this.collect(now)).dashboard
   }
 
-  private buildDashboardData(
+  private async buildDashboardData(
     quotes: RegionalTokenQuotes,
     now: Date,
-  ): WowTokenResponse {
+  ): Promise<WowTokenResponse> {
     const since = new Date(now.getTime() - HISTORY_WINDOW_MS)
 
     try {
+      const [euHistory, usHistory] = await Promise.all([
+        this.historyStore.getHistory('eu', since),
+        this.historyStore.getHistory('us', since),
+      ])
+
       return {
         regions: {
           eu: {
             quote: quotes.eu,
             trend: {
               period: '7d',
-              points: this.historyStore.getHistory('eu', since),
+              points: euHistory,
             },
           },
           us: {
             quote: quotes.us,
             trend: {
               period: '7d',
-              points: this.historyStore.getHistory('us', since),
+              points: usHistory,
             },
           },
         },
@@ -111,7 +116,7 @@ export class WowTokenService {
     let changedRegions: WowRegion[]
 
     try {
-      changedRegions = this.historyStore.saveQuotes(quotes)
+      changedRegions = await this.historyStore.saveQuotes(quotes)
     }
     catch {
       throw new TokenStorageError()
@@ -120,7 +125,7 @@ export class WowTokenService {
     return {
       quotes,
       changedRegions,
-      dashboard: this.buildDashboardData(quotes, now),
+      dashboard: await this.buildDashboardData(quotes, now),
     }
   }
 

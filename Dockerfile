@@ -16,19 +16,16 @@ FROM node:24-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=3000 \
-    NUXT_SQLITE_PATH=/app/.data/wow-token.sqlite
+    PORT=3000
 
 WORKDIR /app
 
-# Nitro's output is self-contained, including the native SQLite module.
+# Nitro's output is self-contained.
 COPY --from=build --chown=node:node /app/.output ./.output
-RUN install -d -o node -g node /app/.data
 
 USER node
 
 EXPOSE 3000
-VOLUME ["/app/.data"]
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD ["node", "-e", "const net=require('node:net');const socket=net.connect(Number(process.env.PORT)||3000,'127.0.0.1');socket.setTimeout(2000);socket.on('connect',()=>{socket.end();process.exit(0)});socket.on('timeout',()=>{socket.destroy();process.exit(1)});socket.on('error',()=>process.exit(1))"]

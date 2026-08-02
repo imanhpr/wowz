@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
+import postgres from 'postgres'
+import { readDatabaseConfig, type DatabaseConfig } from './config'
 import * as schema from './schema'
 
 function resolveMigrationsFolder(): string {
@@ -19,30 +20,33 @@ function resolveMigrationsFolder(): string {
   ) ?? projectMigrationsFolder
 }
 
-export function createWowTokenDatabase(
-  sqlitePath: string,
+export async function createWowTokenDatabase(
+  config: DatabaseConfig = readDatabaseConfig(),
   migrationsFolder = resolveMigrationsFolder(),
 ) {
-  const resolvedPath = resolve(sqlitePath)
-  mkdirSync(dirname(resolvedPath), { recursive: true })
-
-  const sqlite = new Database(resolvedPath)
-  sqlite.pragma('journal_mode = WAL')
-  sqlite.pragma('foreign_keys = ON')
-  const db = drizzle(sqlite, { schema })
+  const client = config.url
+    ? postgres(config.url)
+    : postgres({
+        host: config.host,
+        database: config.database,
+        password: config.password,
+        port: config.port,
+        user: config.user,
+      })
+  const db = drizzle(client, { schema })
 
   try {
-    migrate(db, { migrationsFolder })
+    await migrate(db, { migrationsFolder })
   }
   catch (error) {
-    sqlite.close()
+    await client.end()
     throw error
   }
 
   return {
     db,
-    close: () => sqlite.close(),
+    close: () => client.end(),
   }
 }
 
-export type WowTokenDatabase = ReturnType<typeof createWowTokenDatabase>['db']
+export type WowTokenDatabase = Awaited<ReturnType<typeof createWowTokenDatabase>>['db']

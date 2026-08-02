@@ -6,10 +6,9 @@ import { attachWowTokenEventStream } from '../../utils/wow-token-sse'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const runtime = getWowTokenRuntime({
+  const runtime = await getWowTokenRuntime({
     battlenetClientId: config.battlenetClientId,
     battlenetClientSecret: config.battlenetClientSecret,
-    sqlitePath: config.sqlitePath,
   }, $fetch as unknown as HttpClient)
 
   if (!runtime.stream.hasSnapshot) {

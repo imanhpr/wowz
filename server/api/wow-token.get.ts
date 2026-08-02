@@ -5,10 +5,9 @@ import { getWowTokenRuntime } from '../utils/wow-token-runtime'
 
 export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
-  const runtime = getWowTokenRuntime({
+  const runtime = await getWowTokenRuntime({
     battlenetClientId: config.battlenetClientId,
     battlenetClientSecret: config.battlenetClientSecret,
-    sqlitePath: config.sqlitePath,
   }, $fetch as unknown as HttpClient)
 
   try {

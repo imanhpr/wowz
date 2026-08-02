@@ -8,8 +8,8 @@ import type { WowTokenDatabase } from './client'
 import { wowTokenPrices } from './schema'
 
 export interface TokenHistoryStore {
-  saveQuotes(quotes: RegionalTokenQuotes): WowRegion[]
-  getHistory(region: WowRegion, since: Date): TokenPricePoint[]
+  saveQuotes(quotes: RegionalTokenQuotes): Promise<WowRegion[]>
+  getHistory(region: WowRegion, since: Date): Promise<TokenPricePoint[]>
 }
 
 interface RepositoryLogger {
@@ -22,37 +22,37 @@ export class WowTokenRepository implements TokenHistoryStore {
     private readonly logger: RepositoryLogger = console,
   ) {}
 
-  saveQuotes(quotes: RegionalTokenQuotes): WowRegion[] {
+  async saveQuotes(quotes: RegionalTokenQuotes): Promise<WowRegion[]> {
     const insertedQuotes: Array<{
       region: WowRegion
       quote: TokenPricePoint
     }> = []
 
-    this.db.transaction((transaction) => {
+    await this.db.transaction(async (transaction) => {
       for (const region of ['eu', 'us'] as const) {
         const quote = quotes[region]
-        const regionValue = sql.param(region, wowTokenPrices.region)
-        const priceValue = sql.param(quote.priceGold, wowTokenPrices.priceGold)
-        const timestampValue = sql.param(new Date(quote.timestamp), wowTokenPrices.timestamp)
+        const result = await transaction.execute<{ region: WowRegion }>(sql`
+          insert into ${wowTokenPrices} (
+            ${wowTokenPrices.region},
+            ${wowTokenPrices.priceGold},
+            ${wowTokenPrices.timestamp}
+          )
+          select ${region}, ${quote.priceGold}, ${new Date(quote.timestamp)}
+          where (
+            select ${wowTokenPrices.priceGold}
+            from ${wowTokenPrices}
+            where ${wowTokenPrices.region} = ${region}
+            order by ${wowTokenPrices.timestamp} desc
+            limit 1
+          ) is distinct from ${quote.priceGold}
+          on conflict (
+            ${wowTokenPrices.region},
+            ${wowTokenPrices.timestamp}
+          ) do nothing
+          returning ${wowTokenPrices.region}
+        `)
 
-        const result = transaction
-          .insert(wowTokenPrices)
-          .select(sql`
-            select null, ${regionValue}, ${priceValue}, ${timestampValue}
-            where (
-              select ${wowTokenPrices.priceGold}
-              from ${wowTokenPrices}
-              where ${wowTokenPrices.region} = ${regionValue}
-              order by ${wowTokenPrices.timestamp} desc
-              limit 1
-            ) is not ${priceValue}
-          `)
-          .onConflictDoNothing({
-            target: [wowTokenPrices.region, wowTokenPrices.timestamp],
-          })
-          .run()
-
-        if (result.changes > 0) {
+        if (result.length > 0) {
           insertedQuotes.push({ region, quote })
         }
       }
@@ -67,8 +67,8 @@ export class WowTokenRepository implements TokenHistoryStore {
     return insertedQuotes.map(({ region }) => region)
   }
 
-  getHistory(region: WowRegion, since: Date): TokenPricePoint[] {
-    return this.db
+  async getHistory(region: WowRegion, since: Date): Promise<TokenPricePoint[]> {
+    const rows = await this.db
       .select({
         priceGold: wowTokenPrices.priceGold,
         timestamp: wowTokenPrices.timestamp,
@@ -79,10 +79,10 @@ export class WowTokenRepository implements TokenHistoryStore {
         gte(wowTokenPrices.timestamp, since),
       ))
       .orderBy(asc(wowTokenPrices.timestamp))
-      .all()
-      .map(row => ({
-        priceGold: row.priceGold,
-        timestamp: row.timestamp.toISOString(),
-      }))
+
+    return rows.map(row => ({
+      priceGold: row.priceGold,
+      timestamp: row.timestamp.toISOString(),
+    }))
   }
 }

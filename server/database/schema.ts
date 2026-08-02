@@ -1,10 +1,10 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, pgTable, serial, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 
-export const wowTokenPrices = sqliteTable('wow_token_prices', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const wowTokenPrices = pgTable('wow_token_prices', {
+  id: serial('id').primaryKey(),
   region: text('region', { enum: ['eu', 'us'] }).notNull(),
   priceGold: integer('price_gold').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp_ms' }).notNull(),
+  timestamp: timestamp('timestamp', { mode: 'date', withTimezone: true }).notNull(),
 }, table => [
   uniqueIndex('wow_token_prices_region_timestamp_unique')
     .on(table.region, table.timestamp),

@@ -37,7 +37,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     battlenetClientId: '',
     battlenetClientSecret: '',
-    sqlitePath: '.data/wow-token.sqlite',
   },
 
   nitro: {

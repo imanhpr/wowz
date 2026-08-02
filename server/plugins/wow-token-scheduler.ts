@@ -2,17 +2,16 @@ import { closeWowTokenRuntime, getWowTokenRuntime } from '../utils/wow-token-run
 import { startWowTokenScheduler } from '../utils/wow-token-scheduler'
 import type { HttpClient } from '../utils/battlenet'
 
-export default defineNitroPlugin((nitroApp) => {
+export default defineNitroPlugin(async (nitroApp) => {
   const config = useRuntimeConfig()
-  const runtime = getWowTokenRuntime({
+  const runtime = await getWowTokenRuntime({
     battlenetClientId: config.battlenetClientId,
     battlenetClientSecret: config.battlenetClientSecret,
-    sqlitePath: config.sqlitePath,
   }, $fetch as unknown as HttpClient)
   const stopScheduler = startWowTokenScheduler(() => runtime.refresh())
 
-  nitroApp.hooks.hook('close', () => {
+  nitroApp.hooks.hook('close', async () => {
     stopScheduler()
-    closeWowTokenRuntime()
+    await closeWowTokenRuntime()
   })
 })

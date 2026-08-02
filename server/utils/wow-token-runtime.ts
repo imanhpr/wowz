@@ -8,7 +8,6 @@ import type { WowTokenResponse } from '../../shared/types/wow-token'
 interface WowTokenRuntimeConfig {
   battlenetClientId: string
   battlenetClientSecret: string
-  sqlitePath: string
 }
 
 interface WowTokenRuntime {
@@ -16,58 +15,72 @@ interface WowTokenRuntime {
   service: WowTokenService
   stream: WowTokenStreamHub
   refresh: () => Promise<WowTokenResponse>
-  close: () => void
+  close: () => Promise<void>
 }
 
 let runtime: WowTokenRuntime | null = null
+let runtimePromise: Promise<WowTokenRuntime> | null = null
 
-export function getWowTokenRuntime(
+export async function getWowTokenRuntime(
   config: WowTokenRuntimeConfig,
   httpClient: HttpClient,
-): WowTokenRuntime {
+): Promise<WowTokenRuntime> {
   const key = JSON.stringify([
     config.battlenetClientId,
     config.battlenetClientSecret,
-    config.sqlitePath,
   ])
 
   if (runtime?.key === key) {
     return runtime
   }
 
-  runtime?.close()
-
-  const database = createWowTokenDatabase(config.sqlitePath)
-  const credentials = {
-    clientId: config.battlenetClientId.trim(),
-    clientSecret: config.battlenetClientSecret.trim(),
-  }
-  const repository = new WowTokenRepository(database.db)
-  const battleNetClient = new BattleNetClient(credentials, httpClient)
-  const service = new WowTokenService(credentials, battleNetClient, repository)
-  const stream = new WowTokenStreamHub()
-
-  const refresh = async () => {
-    const result = await service.collect()
-    stream.update(result.dashboard, result.changedRegions.length > 0)
-    return result.dashboard
+  if (runtimePromise) {
+    return runtimePromise
   }
 
-  runtime = {
-    key,
-    service,
-    stream,
-    refresh,
-    close: () => {
-      stream.clear()
-      database.close()
-    },
-  }
+  runtimePromise = (async () => {
+    await runtime?.close()
 
-  return runtime
+    const database = await createWowTokenDatabase()
+    const credentials = {
+      clientId: config.battlenetClientId.trim(),
+      clientSecret: config.battlenetClientSecret.trim(),
+    }
+    const repository = new WowTokenRepository(database.db)
+    const battleNetClient = new BattleNetClient(credentials, httpClient)
+    const service = new WowTokenService(credentials, battleNetClient, repository)
+    const stream = new WowTokenStreamHub()
+
+    const refresh = async () => {
+      const result = await service.collect()
+      stream.update(result.dashboard, result.changedRegions.length > 0)
+      return result.dashboard
+    }
+
+    runtime = {
+      key,
+      service,
+      stream,
+      refresh,
+      close: async () => {
+        stream.clear()
+        await database.close()
+      },
+    }
+
+    return runtime
+  })()
+
+  try {
+    return await runtimePromise
+  }
+  finally {
+    runtimePromise = null
+  }
 }
 
-export function closeWowTokenRuntime(): void {
-  runtime?.close()
+export async function closeWowTokenRuntime(): Promise<void> {
+  await runtimePromise
+  await runtime?.close()
   runtime = null
 }
