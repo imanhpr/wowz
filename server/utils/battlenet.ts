@@ -28,6 +28,74 @@ interface CachedAccessToken {
   expiresAt: number
 }
 
+type BattleNetRequestKind = 'OAuth' | 'quote'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getHttpErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error)) {
+    return undefined
+  }
+
+  const response = isRecord(error.response) ? error.response : undefined
+  const status = response?.status ?? error.statusCode ?? error.status
+
+  return typeof status === 'number' && Number.isFinite(status)
+    ? status
+    : undefined
+}
+
+function getHttpErrorResponseBody(error: unknown): unknown {
+  if (!isRecord(error)) {
+    return undefined
+  }
+
+  if (error.data !== undefined) {
+    return error.data
+  }
+
+  return isRecord(error.response) ? error.response._data : undefined
+}
+
+function formatResponseBody(body: unknown): string {
+  if (body === undefined) {
+    return '<unavailable>'
+  }
+
+  if (typeof body === 'string') {
+    return body
+  }
+
+  try {
+    return JSON.stringify(body)
+  }
+  catch {
+    return String(body)
+  }
+}
+
+export class BattleNetRequestError extends Error {
+  readonly statusCode?: number
+  readonly responseBody?: unknown
+
+  constructor(region: WowRegion, requestKind: BattleNetRequestKind, error: unknown) {
+    const statusCode = getHttpErrorStatus(error)
+    const responseBody = getHttpErrorResponseBody(error)
+    const reason = error instanceof Error ? error.message : String(error)
+
+    super(
+      `Battle.net ${region.toUpperCase()} ${requestKind} request failed; `
+      + `status=${statusCode ?? '<unavailable>'}; `
+      + `response=${formatResponseBody(responseBody)}; reason=${reason}`,
+    )
+    this.name = 'BattleNetRequestError'
+    this.statusCode = statusCode
+    this.responseBody = responseBody
+  }
+}
+
 const REGION_CONFIG = {
   eu: {
     oauth: 'https://eu.battle.net/oauth/token',
@@ -63,16 +131,23 @@ export class BattleNetClient implements BattleNetQuoteClient {
   async fetchQuote(region: WowRegion): Promise<TokenPricePoint> {
     const config = REGION_CONFIG[region]
     const accessToken = await this.getAccessToken(region)
-    const token = await this.httpClient<BattleNetTokenResponse>(config.token, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-      },
-      query: {
-        namespace: config.namespace,
-        locale: config.locale,
-      },
-    })
+    let token: BattleNetTokenResponse
+
+    try {
+      token = await this.httpClient<BattleNetTokenResponse>(config.token, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+        query: {
+          namespace: config.namespace,
+          locale: config.locale,
+        },
+      })
+    }
+    catch (error) {
+      throw new BattleNetRequestError(region, 'quote', error)
+    }
 
     if (
       typeof token.price !== 'number'
@@ -107,14 +182,21 @@ export class BattleNetClient implements BattleNetQuoteClient {
       .from(`${this.credentials.clientId}:${this.credentials.clientSecret}`)
       .toString('base64')
 
-    const oauth = await this.httpClient<OAuthResponse>(config.oauth, {
-      method: 'POST',
-      headers: {
-        authorization: `Basic ${authorization}`,
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials',
-    })
+    let oauth: OAuthResponse
+
+    try {
+      oauth = await this.httpClient<OAuthResponse>(config.oauth, {
+        method: 'POST',
+        headers: {
+          authorization: `Basic ${authorization}`,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: 'grant_type=client_credentials',
+      })
+    }
+    catch (error) {
+      throw new BattleNetRequestError(region, 'OAuth', error)
+    }
 
     if (!oauth.access_token) {
       throw new Error('Battle.net OAuth response did not contain an access token')

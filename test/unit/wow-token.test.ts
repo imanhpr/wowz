@@ -4,6 +4,7 @@ import { readDatabaseConfig } from '../../server/database/config'
 import { WowTokenRepository, type TokenHistoryStore } from '../../server/database/wow-token-repository'
 import {
   BattleNetClient,
+  BattleNetRequestError,
   battleNetEndpoints,
   type BattleNetQuoteClient,
   type HttpClient,
@@ -138,6 +139,44 @@ describe('Battle.net client', () => {
     const client = new BattleNetClient(credentials, httpClient)
 
     await expect(client.fetchQuote('eu')).rejects.toThrow('malformed')
+  })
+
+  it('reports the status and response body when OAuth fails', async () => {
+    const responseBody = { error: 'invalid_client', error_description: 'Bad credentials' }
+    const httpError = Object.assign(new Error('401 Unauthorized'), {
+      data: responseBody,
+      response: { status: 401, _data: responseBody },
+    })
+    const httpClient = vi.fn().mockRejectedValue(httpError) as unknown as HttpClient
+    const client = new BattleNetClient(credentials, httpClient)
+    const request = client.fetchQuote('eu')
+
+    await expect(request).rejects.toBeInstanceOf(BattleNetRequestError)
+    await expect(request).rejects.toMatchObject({
+      statusCode: 401,
+      responseBody,
+    })
+    await expect(request).rejects.toThrow(
+      'status=401; response={"error":"invalid_client","error_description":"Bad credentials"}',
+    )
+  })
+
+  it('reports the status and response body when a quote request fails', async () => {
+    const httpError = Object.assign(new Error('503 Service Unavailable'), {
+      data: 'maintenance',
+      response: { status: 503, _data: 'maintenance' },
+    })
+    const httpClient = vi.fn()
+      .mockResolvedValueOnce({ access_token: 'access-token' })
+      .mockRejectedValueOnce(httpError) as unknown as HttpClient
+    const client = new BattleNetClient(credentials, httpClient)
+    const request = client.fetchQuote('us')
+
+    await expect(request).rejects.toMatchObject({
+      statusCode: 503,
+      responseBody: 'maintenance',
+    })
+    await expect(request).rejects.toThrow('status=503; response=maintenance')
   })
 })
 
