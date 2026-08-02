@@ -16,8 +16,8 @@ export class TokenConfigurationError extends Error {
 }
 
 export class TokenUpstreamError extends Error {
-  constructor() {
-    super('Unable to retrieve the WoW Token prices')
+  constructor(cause?: unknown) {
+    super('Unable to retrieve the WoW Token prices', { cause })
     this.name = 'TokenUpstreamError'
   }
 }
@@ -104,13 +104,13 @@ export class WowTokenService {
 
     try {
       const [eu, us] = await Promise.all([
-        this.battleNetClient.fetchQuote('eu'),
-        this.battleNetClient.fetchQuote('us'),
+        this.fetchRegionalQuote('eu'),
+        this.fetchRegionalQuote('us'),
       ])
       quotes = { eu, us }
     }
-    catch {
-      throw new TokenUpstreamError()
+    catch (error) {
+      throw new TokenUpstreamError(error)
     }
 
     let changedRegions: WowRegion[]
@@ -135,6 +135,18 @@ export class WowTokenService {
       || this.credentials.clientSecret.trim().length === 0
     ) {
       throw new TokenConfigurationError()
+    }
+  }
+
+  private async fetchRegionalQuote(region: WowRegion) {
+    try {
+      return await this.battleNetClient.fetchQuote(region)
+    }
+    catch (error) {
+      throw new Error(
+        `Battle.net ${region.toUpperCase()} quote request failed`,
+        { cause: error },
+      )
     }
   }
 }

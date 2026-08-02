@@ -187,13 +187,20 @@ describe('WoW Token service', () => {
   })
 
   it('persists nothing and sanitizes details when either regional request fails', async () => {
-    const client = createClientMock({ us: new Error('secret upstream response') })
+    const upstreamError = new Error('secret upstream response')
+    const client = createClientMock({ us: upstreamError })
     const store = createStoreMock()
     const service = new WowTokenService(credentials, client, store)
     const request = service.collect()
 
     await expect(request).rejects.toBeInstanceOf(TokenUpstreamError)
     await expect(request).rejects.not.toThrow('secret upstream response')
+    await expect(request).rejects.toMatchObject({
+      cause: {
+        message: 'Battle.net US quote request failed',
+        cause: upstreamError,
+      },
+    })
     expect(store.saveQuotes).not.toHaveBeenCalled()
   })
 
@@ -384,6 +391,10 @@ describe('minute collector', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(logger.error).toHaveBeenCalledOnce()
+    expect(logger.error).toHaveBeenCalledWith(
+      '[wow-token] Scheduled collection failed',
+      expect.objectContaining({ message: 'upstream' }),
+    )
     expect(logger.info).toHaveBeenCalledWith('[wow-token] Scheduled collection started')
 
     intervalCallback()
