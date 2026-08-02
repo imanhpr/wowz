@@ -142,6 +142,7 @@ describe('Battle.net client', () => {
   })
 
   it('reports the status and response body when OAuth fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const responseBody = { error: 'invalid_client', error_description: 'Bad credentials' }
     const httpError = Object.assign(new Error('401 Unauthorized'), {
       data: responseBody,
@@ -159,9 +160,17 @@ describe('Battle.net client', () => {
     await expect(request).rejects.toThrow(
       'status=401; response={"error":"invalid_client","error_description":"Bad credentials"}',
     )
+    expect(consoleError).toHaveBeenCalledWith('[battle.net] Request failed', {
+      region: 'eu',
+      requestKind: 'OAuth',
+      statusCode: 401,
+      response: responseBody,
+    })
+    consoleError.mockRestore()
   })
 
   it('reports the status and response body when a quote request fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const httpError = Object.assign(new Error('503 Service Unavailable'), {
       data: 'maintenance',
       response: { status: 503, _data: 'maintenance' },
@@ -177,6 +186,13 @@ describe('Battle.net client', () => {
       responseBody: 'maintenance',
     })
     await expect(request).rejects.toThrow('status=503; response=maintenance')
+    expect(consoleError).toHaveBeenCalledWith('[battle.net] Request failed', {
+      region: 'us',
+      requestKind: 'quote',
+      statusCode: 503,
+      response: 'maintenance',
+    })
+    consoleError.mockRestore()
   })
 })
 
