@@ -38,9 +38,7 @@ export function startWowTokenScheduler(
       logger.info("[wow-token] Scheduled collection completed successfully");
     } catch (error) {
       logger.error("Scheduled WoW Token collection failed");
-      logger.error(
-        error instanceof Error ? (error.stack ?? error.message) : String(error),
-      );
+      console.error(error);
     } finally {
       isRunning = false;
     }
